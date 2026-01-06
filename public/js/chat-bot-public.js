@@ -10,7 +10,15 @@
 					Chatbot
 					<button id="chatbot-close" style="float:right; background:none; border:none; color:white; font-size:20px;">×</button>
 				</div>
-				<div class="chatbot-messages" id="chatbot-messages"></div>
+				<div class="chatbot-messages" id="chatbot-messages">
+					<div class="chatbot-typing" id="chatbot-typing">
+						<div class="dots">
+							<span></span>
+							<span></span>
+							<span></span>
+						</div>
+					</div>
+				</div>
 				<div class="chatbot-input-area">
 					<input type="text" class="chatbot-input" id="chatbot-input" placeholder="Escribe tu mensaje...">
 					<button class="chatbot-send" id="chatbot-send">Enviar</button>
@@ -29,6 +37,19 @@
 			$('#chatbot-toggle').show();
 		});
 
+		// Format message text
+		function formatMessage(text) {
+			// Replace **bold** with <strong>bold</strong>
+			text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+			// Replace line breaks with <br>
+			text = text.replace(/\n/g, '<br>');
+			// Replace - or * at start of line with bullet
+			text = text.replace(/^[-*]\s+(.*)$/gm, '<li>$1</li>');
+			// Wrap consecutive <li> in <ul>
+			text = text.replace(/(<li>.*<\/li>\s*)+/g, '<ul>$&</ul>');
+			return text;
+		}
+
 		// Send message
 		function sendMessage() {
 			var message = $('#chatbot-input').val().trim();
@@ -37,6 +58,10 @@
 			// Add user message
 			$('#chatbot-messages').append('<div class="chatbot-message user">' + message + '</div>');
 			$('#chatbot-input').val('');
+			$('#chatbot-messages').scrollTop($('#chatbot-messages')[0].scrollHeight);
+
+			// Show typing indicator
+			$('#chatbot-typing').show();
 			$('#chatbot-messages').scrollTop($('#chatbot-messages')[0].scrollHeight);
 
 			// Get current post ID
@@ -53,14 +78,19 @@
 					nonce: chatbot_ajax.nonce
 				},
 				success: function(response) {
+					// Hide typing indicator
+					$('#chatbot-typing').hide();
 					if (response.success) {
-						$('#chatbot-messages').append('<div class="chatbot-message bot">' + response.data.response + '</div>');
+						var formattedResponse = formatMessage(response.data.response);
+						$('#chatbot-messages').append('<div class="chatbot-message bot">' + formattedResponse + '</div>');
 						$('#chatbot-messages').scrollTop($('#chatbot-messages')[0].scrollHeight);
 					} else {
 						$('#chatbot-messages').append('<div class="chatbot-message bot">Error: ' + response.data + '</div>');
 					}
 				},
 				error: function() {
+					// Hide typing indicator
+					$('#chatbot-typing').hide();
 					$('#chatbot-messages').append('<div class="chatbot-message bot">Error al enviar mensaje.</div>');
 				}
 			});
