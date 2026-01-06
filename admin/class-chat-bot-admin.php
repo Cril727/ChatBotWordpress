@@ -52,6 +52,9 @@ class Chat_Bot_Admin {
 		$this->plugin_name = $plugin_name;
 		$this->version = $version;
 
+		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
+		add_action( 'admin_init', array( $this, 'register_settings' ) );
+
 	}
 
 	/**
@@ -98,6 +101,70 @@ class Chat_Bot_Admin {
 
 		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/chat-bot-admin.js', array( 'jquery' ), $this->version, false );
 
+	}
+
+	/**
+	 * Add admin menu
+	 */
+	public function add_admin_menu() {
+		add_menu_page(
+			'Chat Bot Settings',
+			'Chat Bot',
+			'manage_options',
+			'chat-bot-settings',
+			array( $this, 'settings_page' ),
+			'dashicons-format-chat',
+			30
+		);
+	}
+
+	/**
+	 * Register settings
+	 */
+	public function register_settings() {
+		register_setting( 'chatbot_settings', 'chatbot_openai_api_key' );
+
+		add_settings_section(
+			'chatbot_main_section',
+			'Configuración de OpenAI',
+			null,
+			'chatbot_settings'
+		);
+
+		add_settings_field(
+			'openai_api_key',
+			'Clave API de OpenAI',
+			array( $this, 'api_key_field_callback' ),
+			'chatbot_settings',
+			'chatbot_main_section'
+		);
+	}
+
+	/**
+	 * Settings page
+	 */
+	public function settings_page() {
+		?>
+		<div class="wrap">
+			<h1>Configuración del Chat Bot</h1>
+			<form method="post" action="options.php">
+				<?php
+				settings_fields( 'chatbot_settings' );
+				do_settings_sections( 'chatbot_settings' );
+				submit_button();
+				?>
+			</form>
+		</div>
+		<?php
+	}
+
+	/**
+	 * API key field
+	 */
+	public function api_key_field_callback() {
+		$value = get_option( 'chatbot_openai_api_key' );
+		echo '<input type="password" name="chatbot_openai_api_key" value="' . esc_attr( $value ) . '" size="50" />';
+		echo '<p class="description">Ingresa tu clave API de OpenAI para habilitar el chatbot.</p>';
 	}
 
 }

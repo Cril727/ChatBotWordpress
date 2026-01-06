@@ -98,6 +98,35 @@ class Chat_Bot_Public {
 
 		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/chat-bot-public.js', array( 'jquery' ), $this->version, false );
 
+		wp_localize_script( $this->plugin_name, 'chatbot_ajax', array(
+			'ajax_url' => admin_url( 'admin-ajax.php' ),
+			'nonce' => wp_create_nonce( 'chatbot_nonce' ),
+		) );
+
+		// Pass current post ID
+		if ( is_singular() ) {
+			wp_localize_script( $this->plugin_name, 'chatbot_post_id', get_the_ID() );
+		}
+
+	}
+
+	/**
+	 * Handle AJAX chat message
+	 */
+	public function handle_chat_message() {
+		check_ajax_referer('chatbot_nonce', 'nonce');
+
+		$message = sanitize_text_field($_POST['message'] ?? '');
+		$current_post_id = intval($_POST['post_id'] ?? 0);
+
+		if (empty($message)) {
+			wp_send_json_error('Mensaje vacío');
+		}
+
+		$chat = new Chat_Bot_Chat();
+		$response = $chat->process_message($message, $current_post_id);
+
+		wp_send_json_success(['response' => $response]);
 	}
 
 }

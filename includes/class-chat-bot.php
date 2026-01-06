@@ -78,6 +78,7 @@ class Chat_Bot {
 		$this->set_locale();
 		$this->define_admin_hooks();
 		$this->define_public_hooks();
+		$this->define_indexing_hooks();
 
 	}
 
@@ -110,6 +111,16 @@ class Chat_Bot {
 		 * of the plugin.
 		 */
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-chat-bot-i18n.php';
+
+		/**
+		 * The class responsible for content indexing.
+		 */
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-chat-bot-indexer.php';
+
+		/**
+		 * The class responsible for chat processing.
+		 */
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-chat-bot-chat.php';
 
 		/**
 		 * The class responsible for defining all actions that occur in the admin area.
@@ -173,6 +184,24 @@ class Chat_Bot {
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
 
+		// AJAX for chat
+		$this->loader->add_action( 'wp_ajax_chatbot_send_message', $plugin_public, 'handle_chat_message' );
+		$this->loader->add_action( 'wp_ajax_nopriv_chatbot_send_message', $plugin_public, 'handle_chat_message' );
+
+	}
+
+	/**
+	 * Register all of the hooks related to content indexing.
+	 *
+	 * @since    1.0.0
+	 * @access   private
+	 */
+	private function define_indexing_hooks() {
+		$indexer = new Chat_Bot_Indexer();
+
+		$this->loader->add_action( 'save_post', $indexer, 'index_post' );
+		$this->loader->add_action( 'wp_insert_term', $indexer, 'index_db_metadata' ); // For categories/tags
+		$this->loader->add_action( 'plugins_loaded', $indexer, 'index_db_metadata' ); // Initial index
 	}
 
 	/**

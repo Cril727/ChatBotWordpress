@@ -2,3 +2,94 @@
  * All of the CSS for your public-facing functionality should be
  * included in this file.
  */
+
+.chatbot-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 350px;
+    height: 500px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 9999;
+    display: none;
+    flex-direction: column;
+    font-family: Arial, sans-serif;
+}
+
+.chatbot-toggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background: #007cba;
+    border-radius: 50%;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 10000;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+.chatbot-header {
+    background: #007cba;
+    color: white;
+    padding: 15px;
+    border-radius: 10px 10px 0 0;
+    font-weight: bold;
+}
+
+.chatbot-messages {
+    flex: 1;
+    padding: 15px;
+    overflow-y: auto;
+    background: #f9f9f9;
+}
+
+.chatbot-message {
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    max-width: 80%;
+}
+
+.chatbot-message.user {
+    background: #007cba;
+    color: white;
+    margin-left: auto;
+}
+
+.chatbot-message.bot {
+    background: #e0e0e0;
+    color: #333;
+}
+
+.chatbot-input-area {
+    padding: 15px;
+    border-top: 1px solid #ddd;
+    display: flex;
+}
+
+.chatbot-input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-right: 10px;
+}
+
+.chatbot-send {
+    padding: 10px 15px;
+    background: #007cba;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.chatbot-send:hover {
+    background: #005a87;
+}
