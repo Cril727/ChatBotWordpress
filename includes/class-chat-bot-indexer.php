@@ -60,7 +60,7 @@ class Chat_Bot_Indexer {
     }
 
     /**
-     * Index database metadata
+     * Index database metadata and custom queries
      */
     public function index_db_metadata() {
         // Index categories
@@ -76,8 +76,29 @@ class Chat_Bot_Indexer {
             }
         }
 
-        // Index tags similarly
-        // ... add more as needed
+        // Index custom DB queries
+        $this->index_custom_db_queries();
+    }
+
+    /**
+     * Index results from custom database queries
+     */
+    private function index_custom_db_queries() {
+        $db_query = new Chat_Bot_DB_Query();
+        $results = $db_query->execute_custom_queries();
+        $texts = $db_query->format_results_for_indexing($results);
+
+        foreach ($texts as $text) {
+            $chunks = $this->chunk_text($text);
+            foreach ($chunks as $chunk) {
+                $embedding = $this->generate_embedding($chunk);
+                if ($embedding) {
+                    $this->store_embedding('db_query', 0, $chunk, $embedding);
+                }
+            }
+        }
+
+        $db_query->close();
     }
 
     /**

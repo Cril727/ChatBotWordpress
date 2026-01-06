@@ -123,6 +123,11 @@ class Chat_Bot_Admin {
 	 */
 	public function register_settings() {
 		register_setting( 'chatbot_settings', 'chatbot_openai_api_key' );
+		register_setting( 'chatbot_settings', 'chatbot_db_host' );
+		register_setting( 'chatbot_settings', 'chatbot_db_user' );
+		register_setting( 'chatbot_settings', 'chatbot_db_pass' );
+		register_setting( 'chatbot_settings', 'chatbot_db_name' );
+		register_setting( 'chatbot_settings', 'chatbot_custom_queries' );
 
 		add_settings_section(
 			'chatbot_main_section',
@@ -137,6 +142,60 @@ class Chat_Bot_Admin {
 			array( $this, 'api_key_field_callback' ),
 			'chatbot_settings',
 			'chatbot_main_section'
+		);
+
+		add_settings_section(
+			'chatbot_db_section',
+			'Configuración de Base de Datos MySQL',
+			null,
+			'chatbot_settings'
+		);
+
+		add_settings_field(
+			'db_host',
+			'Host de DB',
+			array( $this, 'db_host_field_callback' ),
+			'chatbot_settings',
+			'chatbot_db_section'
+		);
+
+		add_settings_field(
+			'db_user',
+			'Usuario DB',
+			array( $this, 'db_user_field_callback' ),
+			'chatbot_settings',
+			'chatbot_db_section'
+		);
+
+		add_settings_field(
+			'db_pass',
+			'Contraseña DB',
+			array( $this, 'db_pass_field_callback' ),
+			'chatbot_settings',
+			'chatbot_db_section'
+		);
+
+		add_settings_field(
+			'db_name',
+			'Nombre de DB',
+			array( $this, 'db_name_field_callback' ),
+			'chatbot_settings',
+			'chatbot_db_section'
+		);
+
+		add_settings_section(
+			'chatbot_queries_section',
+			'Consultas Personalizadas',
+			array( $this, 'queries_section_callback' ),
+			'chatbot_settings'
+		);
+
+		add_settings_field(
+			'custom_queries',
+			'Consultas SQL (una por línea)',
+			array( $this, 'custom_queries_field_callback' ),
+			'chatbot_settings',
+			'chatbot_queries_section'
 		);
 	}
 
@@ -165,6 +224,54 @@ class Chat_Bot_Admin {
 		$value = get_option( 'chatbot_openai_api_key' );
 		echo '<input type="password" name="chatbot_openai_api_key" value="' . esc_attr( $value ) . '" size="50" />';
 		echo '<p class="description">Ingresa tu clave API de OpenAI para habilitar el chatbot.</p>';
+	}
+
+	/**
+	 * DB host field
+	 */
+	public function db_host_field_callback() {
+		$value = get_option( 'chatbot_db_host', DB_HOST );
+		echo '<input type="text" name="chatbot_db_host" value="' . esc_attr( $value ) . '" size="50" />';
+	}
+
+	/**
+	 * DB user field
+	 */
+	public function db_user_field_callback() {
+		$value = get_option( 'chatbot_db_user', DB_USER );
+		echo '<input type="text" name="chatbot_db_user" value="' . esc_attr( $value ) . '" size="50" />';
+	}
+
+	/**
+	 * DB pass field
+	 */
+	public function db_pass_field_callback() {
+		$value = get_option( 'chatbot_db_pass', DB_PASSWORD );
+		echo '<input type="password" name="chatbot_db_pass" value="' . esc_attr( $value ) . '" size="50" />';
+	}
+
+	/**
+	 * DB name field
+	 */
+	public function db_name_field_callback() {
+		$value = get_option( 'chatbot_db_name', DB_NAME );
+		echo '<input type="text" name="chatbot_db_name" value="' . esc_attr( $value ) . '" size="50" />';
+	}
+
+	/**
+	 * Queries section
+	 */
+	public function queries_section_callback() {
+		echo '<p>Define consultas SQL personalizadas que el chatbot puede ejecutar. Solo SELECT permitidas por seguridad.</p>';
+	}
+
+	/**
+	 * Custom queries field
+	 */
+	public function custom_queries_field_callback() {
+		$value = get_option( 'chatbot_custom_queries' );
+		echo '<textarea name="chatbot_custom_queries" rows="10" cols="50">' . esc_textarea( $value ) . '</textarea>';
+		echo '<p class="description">Una consulta por línea. Ejemplo:<br>SELECT name, email FROM users WHERE active = 1</p>';
 	}
 
 }
