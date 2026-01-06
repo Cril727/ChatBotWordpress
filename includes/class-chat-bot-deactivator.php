@@ -4,7 +4,7 @@
  * Fired during plugin deactivation
  *
  * @link       https://cpro7.wordpress.com
- * @since      1.0.0
+ * @since      1.0.1
  *
  * @package    Chat_Bot
  * @subpackage Chat_Bot/includes
@@ -15,7 +15,7 @@
  *
  * This class defines all code necessary to run during the plugin's deactivation.
  *
- * @since      1.0.0
+ * @since      1.0.1
  * @package    Chat_Bot
  * @subpackage Chat_Bot/includes
  * @author     Cristian Garcia <criatiangarcia637@gmail.com>
@@ -27,7 +27,7 @@ class Chat_Bot_Deactivator {
 	 *
 	 * Long Description.
 	 *
-	 * @since    1.0.0
+	 * @since    1.0.1
 	 */
 	public static function deactivate() {
 

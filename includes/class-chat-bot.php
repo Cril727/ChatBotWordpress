@@ -7,7 +7,7 @@
  * public-facing side of the site and the admin area.
  *
  * @link       https://cpro7.wordpress.com
- * @since      1.0.0
+ * @since      1.0.1
  *
  * @package    Chat_Bot
  * @subpackage Chat_Bot/includes
@@ -22,7 +22,7 @@
  * Also maintains the unique identifier of this plugin as well as the current
  * version of the plugin.
  *
- * @since      1.0.0
+ * @since      1.0.1
  * @package    Chat_Bot
  * @subpackage Chat_Bot/includes
  * @author     Cristian Garcia <criatiangarcia637@gmail.com>
@@ -33,7 +33,7 @@ class Chat_Bot {
 	 * The loader that's responsible for maintaining and registering all hooks that power
 	 * the plugin.
 	 *
-	 * @since    1.0.0
+	 * @since    1.0.1
 	 * @access   protected
 	 * @var      Chat_Bot_Loader    $loader    Maintains and registers all hooks for the plugin.
 	 */
@@ -42,7 +42,7 @@ class Chat_Bot {
 	/**
 	 * The unique identifier of this plugin.
 	 *
-	 * @since    1.0.0
+	 * @since    1.0.1
 	 * @access   protected
 	 * @var      string    $plugin_name    The string used to uniquely identify this plugin.
 	 */
@@ -51,7 +51,7 @@ class Chat_Bot {
 	/**
 	 * The current version of the plugin.
 	 *
-	 * @since    1.0.0
+	 * @since    1.0.1
 	 * @access   protected
 	 * @var      string    $version    The current version of the plugin.
 	 */
@@ -64,13 +64,13 @@ class Chat_Bot {
 	 * Load the dependencies, define the locale, and set the hooks for the admin area and
 	 * the public-facing side of the site.
 	 *
-	 * @since    1.0.0
+	 * @since    1.0.1
 	 */
 	public function __construct() {
 		if ( defined( 'CHAT_BOT_VERSION' ) ) {
 			$this->version = CHAT_BOT_VERSION;
 		} else {
-			$this->version = '1.0.0';
+			$this->version = '1.0.1';
 		}
 		$this->plugin_name = 'chat-bot';
 
@@ -95,7 +95,7 @@ class Chat_Bot {
 	 * Create an instance of the loader which will be used to register the hooks
 	 * with WordPress.
 	 *
-	 * @since    1.0.0
+	 * @since    1.0.1
 	 * @access   private
 	 */
 	private function load_dependencies() {
@@ -148,7 +148,7 @@ class Chat_Bot {
 	 * Uses the Chat_Bot_i18n class in order to set the domain and to register the hook
 	 * with WordPress.
 	 *
-	 * @since    1.0.0
+	 * @since    1.0.1
 	 * @access   private
 	 */
 	private function set_locale() {
@@ -163,7 +163,7 @@ class Chat_Bot {
 	 * Register all of the hooks related to the admin area functionality
 	 * of the plugin.
 	 *
-	 * @since    1.0.0
+	 * @since    1.0.1
 	 * @access   private
 	 */
 	private function define_admin_hooks() {
@@ -179,7 +179,7 @@ class Chat_Bot {
 	 * Register all of the hooks related to the public-facing functionality
 	 * of the plugin.
 	 *
-	 * @since    1.0.0
+	 * @since    1.0.1
 	 * @access   private
 	 */
 	private function define_public_hooks() {
@@ -198,7 +198,7 @@ class Chat_Bot {
 	/**
 	 * Register all of the hooks related to content indexing.
 	 *
-	 * @since    1.0.0
+	 * @since    1.0.1
 	 * @access   private
 	 */
 	private function define_indexing_hooks() {
@@ -212,7 +212,7 @@ class Chat_Bot {
 	/**
 	 * Run the loader to execute all of the hooks with WordPress.
 	 *
-	 * @since    1.0.0
+	 * @since    1.0.1
 	 */
 	public function run() {
 		$this->loader->run();
@@ -222,7 +222,7 @@ class Chat_Bot {
 	 * The name of the plugin used to uniquely identify it within the context of
 	 * WordPress and to define internationalization functionality.
 	 *
-	 * @since     1.0.0
+	 * @since     1.0.1
 	 * @return    string    The name of the plugin.
 	 */
 	public function get_plugin_name() {
@@ -232,7 +232,7 @@ class Chat_Bot {
 	/**
 	 * The reference to the class that orchestrates the hooks with the plugin.
 	 *
-	 * @since     1.0.0
+	 * @since     1.0.1
 	 * @return    Chat_Bot_Loader    Orchestrates the hooks of the plugin.
 	 */
 	public function get_loader() {
@@ -242,7 +242,7 @@ class Chat_Bot {
 	/**
 	 * Retrieve the version number of the plugin.
 	 *
-	 * @since     1.0.0
+	 * @since     1.0.1
 	 * @return    string    The version number of the plugin.
 	 */
 	public function get_version() {
