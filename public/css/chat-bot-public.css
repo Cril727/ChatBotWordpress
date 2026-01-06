@@ -8,6 +8,7 @@
     bottom: 20px;
     right: 20px;
     width: 350px;
+    max-height: 70vh;
     height: 500px;
     background: #fff;
     border-radius: 10px;
@@ -16,6 +17,7 @@
     display: none;
     flex-direction: column;
     font-family: Arial, sans-serif;
+    overflow: hidden;
 }
 
 .chatbot-toggle {
@@ -92,4 +94,18 @@
 
 .chatbot-send:hover {
     background: #005a87;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .chatbot-widget {
+        width: 90vw;
+        max-height: 80vh;
+        left: 5vw;
+        right: auto;
+    }
+    
+    .chatbot-toggle {
+        right: 10px;
+    }
 }
