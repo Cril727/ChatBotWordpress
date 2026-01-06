@@ -29,12 +29,10 @@
 		// Toggle chat
 		$('#chatbot-toggle').on('click', function() {
 			$('#chatbot-widget').toggle();
-			$(this).hide();
 		});
 
 		$('#chatbot-close').on('click', function() {
 			$('#chatbot-widget').hide();
-			$('#chatbot-toggle').show();
 		});
 
 		// Format message text
