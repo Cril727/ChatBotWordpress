@@ -105,7 +105,7 @@ class Chat_Bot_Public {
 
 		// Pass current post ID
 		if ( is_singular() ) {
-			wp_localize_script( $this->plugin_name, 'chatbot_post_id', get_the_ID() );
+			wp_localize_script( $this->plugin_name, 'chatbot_post_id', array( 'id' => get_the_ID() ) );
 		}
 
 	}

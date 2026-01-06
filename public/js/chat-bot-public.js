@@ -40,7 +40,7 @@
 			$('#chatbot-messages').scrollTop($('#chatbot-messages')[0].scrollHeight);
 
 			// Get current post ID
-			var postId = typeof chatbot_post_id !== 'undefined' ? chatbot_post_id : 0;
+			var postId = typeof chatbot_post_id !== 'undefined' ? chatbot_post_id.id : 0;
 
 			// Send to server
 			$.ajax({

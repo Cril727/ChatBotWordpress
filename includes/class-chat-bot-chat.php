@@ -22,19 +22,28 @@ class Chat_Bot_Chat {
      */
     public function process_message($message, $current_post_id = null) {
         $api_key = get_option('chatbot_openai_api_key');
+        error_log('ChatBot Debug: Processing message: ' . $message . ', Post ID: ' . $current_post_id);
         $relevant_chunks = [];
 
         if ($api_key) {
+            error_log('ChatBot Debug: API key available, generating embedding');
             // Generate embedding for the query
             $query_embedding = $this->generate_embedding($message);
             if ($query_embedding) {
+                error_log('ChatBot Debug: Embedding generated successfully');
                 // Search for similar content
                 $relevant_chunks = $this->search_similar($query_embedding, $current_post_id);
+                error_log('ChatBot Debug: Found ' . count($relevant_chunks) . ' relevant chunks');
+            } else {
+                error_log('ChatBot Debug: Failed to generate embedding');
             }
+        } else {
+            error_log('ChatBot Debug: No API key, skipping embeddings');
         }
 
         // If no relevant chunks found or no API key, use site-wide content as fallback
         if (empty($relevant_chunks)) {
+            error_log('ChatBot Debug: Using site content fallback');
             $site_content = $this->get_site_content();
             if ($site_content) {
                 $relevant_chunks = [['chunk' => $site_content, 'similarity' => 1.0]];
@@ -181,6 +190,7 @@ class Chat_Bot_Chat {
      */
     private function generate_response($message, $relevant_chunks) {
         $api_key = get_option('chatbot_openai_api_key');
+        error_log('ChatBot Debug: API key present: ' . (!empty($api_key) ? 'Yes' : 'No'));
 
         // Build context
         $context = '';
@@ -190,10 +200,12 @@ class Chat_Bot_Chat {
 
         // If no API key, provide a basic response using the context
         if (!$api_key) {
+            error_log('ChatBot Debug: No API key, using basic response');
             return $this->generate_basic_response($message, $context);
         }
 
         $prompt = "Contexto del sitio web:\n" . $context . "\n\nPregunta del usuario: " . $message . "\n\nResponde basándote en el contexto proporcionado.";
+        error_log('ChatBot Debug: Sending prompt to OpenAI: ' . substr($prompt, 0, 200) . '...');
 
         $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
             'headers' => [
@@ -211,9 +223,19 @@ class Chat_Bot_Chat {
             'timeout' => 30,
         ]);
 
-        if (is_wp_error($response)) return 'Error al generar respuesta.';
+        if (is_wp_error($response)) {
+            error_log('ChatBot Debug: WP Error in OpenAI call: ' . $response->get_error_message());
+            return 'Error al generar respuesta.';
+        }
 
         $body = json_decode(wp_remote_retrieve_body($response), true);
+        error_log('ChatBot Debug: OpenAI response status: ' . wp_remote_retrieve_response_code($response));
+        error_log('ChatBot Debug: OpenAI response body: ' . print_r($body, true));
+
+        if (isset($body['error'])) {
+            error_log('ChatBot Debug: OpenAI API error: ' . $body['error']['message']);
+        }
+
         return $body['choices'][0]['message']['content'] ?? 'No pude generar una respuesta.';
     }
 
