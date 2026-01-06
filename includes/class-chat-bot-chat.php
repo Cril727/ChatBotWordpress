@@ -189,8 +189,8 @@ class Chat_Bot_Chat {
      * Generate response using OpenAI Chat Completion
      */
     private function generate_response($message, $relevant_chunks) {
-        $api_key = get_option('chatbot_openai_api_key');
-        error_log('ChatBot Debug: API key present: ' . (!empty($api_key) ? 'Yes' : 'No'));
+        $provider = get_option('chatbot_provider', 'openai');
+        error_log('ChatBot Debug: Provider: ' . $provider);
 
         // Build context
         $context = '';
@@ -198,13 +198,27 @@ class Chat_Bot_Chat {
             $context .= $chunk['chunk'] . "\n";
         }
 
-        // If no API key, provide a basic response using the context
+        $prompt = "Contexto del sitio web:\n" . $context . "\n\nPregunta del usuario: " . $message . "\n\nResponde basándote en el contexto proporcionado.";
+
+        if ($provider === 'openai') {
+            return $this->generate_openai_response($prompt, $message, $context);
+        } elseif ($provider === 'google') {
+            return $this->generate_google_response($prompt, $message, $context);
+        } else {
+            return $this->generate_basic_response($message, $context);
+        }
+    }
+
+    private function generate_openai_response($prompt, $message, $context) {
+        $api_key = get_option('chatbot_openai_api_key');
+        $model = get_option('chatbot_openai_model', 'gpt-3.5-turbo');
+        error_log('ChatBot Debug: OpenAI API key present: ' . (!empty($api_key) ? 'Yes' : 'No') . ', Model: ' . $model);
+
         if (!$api_key) {
-            error_log('ChatBot Debug: No API key, using basic response');
+            error_log('ChatBot Debug: No OpenAI API key, using basic response');
             return $this->generate_basic_response($message, $context);
         }
 
-        $prompt = "Contexto del sitio web:\n" . $context . "\n\nPregunta del usuario: " . $message . "\n\nResponde basándote en el contexto proporcionado.";
         error_log('ChatBot Debug: Sending prompt to OpenAI: ' . substr($prompt, 0, 200) . '...');
 
         $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
@@ -213,7 +227,7 @@ class Chat_Bot_Chat {
                 'Content-Type' => 'application/json',
             ],
             'body' => json_encode([
-                'model' => 'gpt-3.5-turbo',
+                'model' => $model,
                 'messages' => [
                     ['role' => 'system', 'content' => 'Eres un asistente útil que responde preguntas basadas en el contenido del sitio web.'],
                     ['role' => 'user', 'content' => $prompt],
@@ -240,6 +254,58 @@ class Chat_Bot_Chat {
         $content = $body['choices'][0]['message']['content'] ?? null;
         if ($content === null) {
             error_log('ChatBot Debug: No content in OpenAI response');
+            return $this->generate_basic_response($message, $context);
+        }
+
+        return $content;
+    }
+
+    private function generate_google_response($prompt, $context) {
+        $api_key = get_option('chatbot_google_api_key');
+        error_log('ChatBot Debug: Google API key present: ' . (!empty($api_key) ? 'Yes' : 'No'));
+
+        if (!$api_key) {
+            error_log('ChatBot Debug: No Google API key, using basic response');
+            return $this->generate_basic_response($message, $context);
+        }
+
+        error_log('ChatBot Debug: Sending prompt to Google AI: ' . substr($prompt, 0, 200) . '...');
+
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' . $api_key;
+
+        $response = wp_remote_post($url, [
+            'headers' => [
+                'Content-Type' => 'application/json',
+            ],
+            'body' => json_encode([
+                'contents' => [
+                    [
+                        'parts' => [
+                            ['text' => $prompt]
+                        ]
+                    ]
+                ]
+            ]),
+            'timeout' => 30,
+        ]);
+
+        if (is_wp_error($response)) {
+            error_log('ChatBot Debug: WP Error in Google call: ' . $response->get_error_message());
+            return $this->generate_basic_response($message, $context);
+        }
+
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        error_log('ChatBot Debug: Google response status: ' . wp_remote_retrieve_response_code($response));
+        error_log('ChatBot Debug: Google response body: ' . print_r($body, true));
+
+        if (isset($body['error'])) {
+            error_log('ChatBot Debug: Google API error: ' . $body['error']['message']);
+            return $this->generate_basic_response($message, $context);
+        }
+
+        $content = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
+        if ($content === null) {
+            error_log('ChatBot Debug: No content in Google response');
             return $this->generate_basic_response($message, $context);
         }
 

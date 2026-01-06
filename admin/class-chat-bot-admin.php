@@ -122,7 +122,10 @@ class Chat_Bot_Admin {
 	 * Register settings
 	 */
 	public function register_settings() {
+		register_setting( 'chatbot_settings', 'chatbot_provider' );
 		register_setting( 'chatbot_settings', 'chatbot_openai_api_key' );
+		register_setting( 'chatbot_settings', 'chatbot_openai_model' );
+		register_setting( 'chatbot_settings', 'chatbot_google_api_key' );
 		register_setting( 'chatbot_settings', 'chatbot_db_host' );
 		register_setting( 'chatbot_settings', 'chatbot_db_user' );
 		register_setting( 'chatbot_settings', 'chatbot_db_pass' );
@@ -131,15 +134,39 @@ class Chat_Bot_Admin {
 
 		add_settings_section(
 			'chatbot_main_section',
-			'Configuración de OpenAI',
+			'Configuración del Proveedor de IA',
 			null,
 			'chatbot_settings'
+		);
+
+		add_settings_field(
+			'provider',
+			'Proveedor de IA',
+			array( $this, 'provider_field_callback' ),
+			'chatbot_settings',
+			'chatbot_main_section'
 		);
 
 		add_settings_field(
 			'openai_api_key',
 			'Clave API de OpenAI',
 			array( $this, 'api_key_field_callback' ),
+			'chatbot_settings',
+			'chatbot_main_section'
+		);
+
+		add_settings_field(
+			'openai_model',
+			'Modelo de OpenAI',
+			array( $this, 'model_field_callback' ),
+			'chatbot_settings',
+			'chatbot_main_section'
+		);
+
+		add_settings_field(
+			'google_api_key',
+			'Clave API de Google AI',
+			array( $this, 'google_api_key_field_callback' ),
 			'chatbot_settings',
 			'chatbot_main_section'
 		);
@@ -218,12 +245,46 @@ class Chat_Bot_Admin {
 	}
 
 	/**
+	 * Provider field
+	 */
+	public function provider_field_callback() {
+		$value = get_option( 'chatbot_provider', 'openai' );
+		echo '<select name="chatbot_provider">';
+		echo '<option value="openai" ' . selected( $value, 'openai', false ) . '>OpenAI</option>';
+		echo '<option value="google" ' . selected( $value, 'google', false ) . '>Google AI (Gemini)</option>';
+		echo '</select>';
+		echo '<p class="description">Selecciona el proveedor de IA a usar.</p>';
+	}
+
+	/**
 	 * API key field
 	 */
 	public function api_key_field_callback() {
 		$value = get_option( 'chatbot_openai_api_key' );
 		echo '<input type="password" name="chatbot_openai_api_key" value="' . esc_attr( $value ) . '" size="50" />';
-		echo '<p class="description">Ingresa tu clave API de OpenAI para habilitar el chatbot.</p>';
+		echo '<p class="description">Ingresa tu clave API de OpenAI.</p>';
+	}
+
+	/**
+	 * Google API key field
+	 */
+	public function google_api_key_field_callback() {
+		$value = get_option( 'chatbot_google_api_key' );
+		echo '<input type="password" name="chatbot_google_api_key" value="' . esc_attr( $value ) . '" size="50" />';
+		echo '<p class="description">Ingresa tu clave API de Google AI para usar Gemini.</p>';
+	}
+
+	/**
+	 * Model field
+	 */
+	public function model_field_callback() {
+		$value = get_option( 'chatbot_openai_model', 'gpt-3.5-turbo' );
+		echo '<select name="chatbot_openai_model">';
+		echo '<option value="gpt-3.5-turbo" ' . selected( $value, 'gpt-3.5-turbo', false ) . '>GPT-3.5 Turbo</option>';
+		echo '<option value="gpt-4" ' . selected( $value, 'gpt-4', false ) . '>GPT-4</option>';
+		echo '<option value="gpt-4-turbo" ' . selected( $value, 'gpt-4-turbo', false ) . '>GPT-4 Turbo</option>';
+		echo '</select>';
+		echo '<p class="description">Selecciona el modelo de OpenAI a usar.</p>';
 	}
 
 	/**
