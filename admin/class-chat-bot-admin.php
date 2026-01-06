@@ -126,6 +126,7 @@ class Chat_Bot_Admin {
 		register_setting( 'chatbot_settings', 'chatbot_openai_api_key' );
 		register_setting( 'chatbot_settings', 'chatbot_openai_model' );
 		register_setting( 'chatbot_settings', 'chatbot_google_api_key' );
+		register_setting( 'chatbot_settings', 'chatbot_google_model' );
 		register_setting( 'chatbot_settings', 'chatbot_db_host' );
 		register_setting( 'chatbot_settings', 'chatbot_db_user' );
 		register_setting( 'chatbot_settings', 'chatbot_db_pass' );
@@ -167,6 +168,14 @@ class Chat_Bot_Admin {
 			'google_api_key',
 			'Clave API de Google AI',
 			array( $this, 'google_api_key_field_callback' ),
+			'chatbot_settings',
+			'chatbot_main_section'
+		);
+
+		add_settings_field(
+			'google_model',
+			'Modelo de Google AI',
+			array( $this, 'google_model_field_callback' ),
 			'chatbot_settings',
 			'chatbot_main_section'
 		);
@@ -248,12 +257,12 @@ class Chat_Bot_Admin {
 	 * Provider field
 	 */
 	public function provider_field_callback() {
-		$value = get_option( 'chatbot_provider', 'openai' );
+		$value = get_option( 'chatbot_provider', 'google' );
 		echo '<select name="chatbot_provider">';
 		echo '<option value="openai" ' . selected( $value, 'openai', false ) . '>OpenAI</option>';
 		echo '<option value="google" ' . selected( $value, 'google', false ) . '>Google AI (Gemini)</option>';
 		echo '</select>';
-		echo '<p class="description">Selecciona el proveedor de IA a usar.</p>';
+		echo '<p class="description">Selecciona el proveedor de IA a usar (por defecto: Google AI).</p>';
 	}
 
 	/**
@@ -272,6 +281,15 @@ class Chat_Bot_Admin {
 		$value = get_option( 'chatbot_google_api_key' );
 		echo '<input type="password" name="chatbot_google_api_key" value="' . esc_attr( $value ) . '" size="50" />';
 		echo '<p class="description">Ingresa tu clave API de Google AI para usar Gemini.</p>';
+	}
+
+	/**
+	 * Google model field
+	 */
+	public function google_model_field_callback() {
+		$value = get_option( 'chatbot_google_model', 'gemini-2.5-flash' );
+		echo '<input type="text" name="chatbot_google_model" value="' . esc_attr( $value ) . '" size="50" />';
+		echo '<p class="description">Ingresa el nombre del modelo de Google AI (por defecto: gemini-2.5-flash).</p>';
 	}
 
 	/**
