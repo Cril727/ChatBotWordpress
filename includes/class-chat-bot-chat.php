@@ -21,17 +21,68 @@ class Chat_Bot_Chat {
      * Process a chat message and return response
      */
     public function process_message($message, $current_post_id = null) {
-        // Generate embedding for the query
-        $query_embedding = $this->generate_embedding($message);
-        if (!$query_embedding) {
-            return 'Lo siento, no pude procesar tu mensaje.';
+        $api_key = get_option('chatbot_openai_api_key');
+        $relevant_chunks = [];
+
+        if ($api_key) {
+            // Generate embedding for the query
+            $query_embedding = $this->generate_embedding($message);
+            if ($query_embedding) {
+                // Search for similar content
+                $relevant_chunks = $this->search_similar($query_embedding, $current_post_id);
+            }
         }
 
-        // Search for similar content
-        $relevant_chunks = $this->search_similar($query_embedding, $current_post_id);
+        // If no relevant chunks found or no API key, use site-wide content as fallback
+        if (empty($relevant_chunks)) {
+            $site_content = $this->get_site_content();
+            if ($site_content) {
+                $relevant_chunks = [['chunk' => $site_content, 'similarity' => 1.0]];
+            }
+        }
 
-        // Generate response using AI
+        // Generate response using AI or basic fallback
         return $this->generate_response($message, $relevant_chunks);
+    }
+
+    /**
+     * Get site-wide content as fallback (all published posts and pages)
+     */
+    private function get_site_content() {
+        $content = '';
+
+        // Get all published posts
+        $posts = get_posts(array(
+            'post_type' => 'post',
+            'post_status' => 'publish',
+            'numberposts' => 50, // Limit to avoid too much content
+            'orderby' => 'date',
+            'order' => 'DESC'
+        ));
+
+        foreach ($posts as $post) {
+            $content .= $post->post_title . ': ' . wp_strip_all_tags($post->post_content) . "\n\n";
+        }
+
+        // Get all published pages
+        $pages = get_posts(array(
+            'post_type' => 'page',
+            'post_status' => 'publish',
+            'numberposts' => 20,
+            'orderby' => 'date',
+            'order' => 'DESC'
+        ));
+
+        foreach ($pages as $page) {
+            $content .= $page->post_title . ': ' . wp_strip_all_tags($page->post_content) . "\n\n";
+        }
+
+        // If no content found, fallback to site description
+        if (empty($content)) {
+            $content = get_bloginfo('description') . ' ' . get_bloginfo('name');
+        }
+
+        return $content;
     }
 
     /**
@@ -130,12 +181,16 @@ class Chat_Bot_Chat {
      */
     private function generate_response($message, $relevant_chunks) {
         $api_key = get_option('chatbot_openai_api_key');
-        if (!$api_key) return 'API key no configurada.';
 
         // Build context
         $context = '';
         foreach ($relevant_chunks as $chunk) {
             $context .= $chunk['chunk'] . "\n";
+        }
+
+        // If no API key, provide a basic response using the context
+        if (!$api_key) {
+            return $this->generate_basic_response($message, $context);
         }
 
         $prompt = "Contexto del sitio web:\n" . $context . "\n\nPregunta del usuario: " . $message . "\n\nResponde basándote en el contexto proporcionado.";
@@ -160,5 +215,76 @@ class Chat_Bot_Chat {
 
         $body = json_decode(wp_remote_retrieve_body($response), true);
         return $body['choices'][0]['message']['content'] ?? 'No pude generar una respuesta.';
+    }
+
+    /**
+     * Generate a basic response when API key is not available
+     */
+    private function generate_basic_response($message, $context) {
+        // Simple keyword-based response generation
+        $message_lower = strtolower($message);
+        $context_lower = strtolower($context);
+
+        // Basic responses for common questions
+        if (strpos($message_lower, 'hola') !== false || strpos($message_lower, 'hello') !== false) {
+            return '¡Hola! Soy el asistente del sitio web. ¿En qué puedo ayudarte?';
+        }
+
+        if (strpos($message_lower, 'adiós') !== false || strpos($message_lower, 'bye') !== false) {
+            return '¡Hasta luego! Gracias por visitarnos.';
+        }
+
+        // Split context into posts/pages for better search
+        $content_parts = explode("\n\n", $context);
+        $relevant_parts = [];
+
+        // Try to find relevant posts/pages
+        $words = explode(' ', $message_lower);
+        $found_posts = [];
+
+        foreach ($content_parts as $part) {
+            if (empty(trim($part))) continue;
+
+            $part_lower = strtolower($part);
+            $relevance_score = 0;
+
+            foreach ($words as $word) {
+                if (strlen($word) > 3) { // Only check meaningful words
+                    if (strpos($part_lower, $word) !== false) {
+                        $relevance_score++;
+                    }
+                }
+            }
+
+            if ($relevance_score > 0) {
+                $found_posts[] = [
+                    'content' => $part,
+                    'score' => $relevance_score
+                ];
+            }
+        }
+
+        // Sort by relevance
+        usort($found_posts, function($a, $b) {
+            return $b['score'] <=> $a['score'];
+        });
+
+        if (!empty($found_posts)) {
+            $response = "Basándome en el contenido del sitio web, encontré esta información relevante:\n\n";
+            // Show top 2 most relevant posts/pages
+            for ($i = 0; $i < min(2, count($found_posts)); $i++) {
+                $content = $found_posts[$i]['content'];
+                // Extract title and content
+                if (strpos($content, ': ') !== false) {
+                    list($title, $body) = explode(': ', $content, 2);
+                    $response .= "**" . $title . "**\n" . substr($body, 0, 200) . "...\n\n";
+                } else {
+                    $response .= substr($content, 0, 300) . "...\n\n";
+                }
+            }
+            return $response;
+        }
+
+        return 'Lo siento, no encontré información específica sobre tu pregunta en el contenido del sitio web. El sitio contiene información sobre: ' . substr($context, 0, 200) . '... ¿Puedes ser más específico?';
     }
 }
