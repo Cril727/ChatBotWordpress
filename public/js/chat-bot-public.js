@@ -1,8 +1,8 @@
-(function( $ ) {
+(function ($) {
 	'use strict';
 
-	$(function() {
-		// Add chat widget to body
+	$(function () {
+
 		$('body').append(`
 			<div class="chatbot-toggle" id="chatbot-toggle">💬</div>
 			<div class="chatbot-widget" id="chatbot-widget">
@@ -10,15 +10,7 @@
 					Chatbot
 					<button id="chatbot-close" style="float:right; background:none; border:none; color:white; font-size:20px;">×</button>
 				</div>
-				<div class="chatbot-messages" id="chatbot-messages">
-					<div class="chatbot-typing" id="chatbot-typing">
-						<div class="dots">
-							<span></span>
-							<span></span>
-							<span></span>
-						</div>
-					</div>
-				</div>
+				<div class="chatbot-messages" id="chatbot-messages"></div>
 				<div class="chatbot-input-area">
 					<input type="text" class="chatbot-input" id="chatbot-input" placeholder="Escribe tu mensaje...">
 					<button class="chatbot-send" id="chatbot-send">Enviar</button>
@@ -26,82 +18,129 @@
 			</div>
 		`);
 
-		// Toggle chat
-		$('#chatbot-toggle').on('click', function() {
-			$('#chatbot-widget').toggle();
-			if ($('#chatbot-widget').is(':visible')) {
-				$(this).hide();
-			}
-		});
+		const $widget = $('#chatbot-widget');
+		const $toggle = $('#chatbot-toggle');
+		const $messages = $('#chatbot-messages');
+		const $input = $('#chatbot-input');
+		const $send = $('#chatbot-send');
 
-		$('#chatbot-close').on('click', function() {
-			$('#chatbot-widget').hide();
-			$('#chatbot-toggle').show();
-		});
+		let enviando = false;
 
-		// Format message text
+		function escapeHTML(text) {
+			return $('<div>').text(text).html();
+		}
+
+		function scrollBottom() {
+			setTimeout(function () {
+				$messages.scrollTop($messages[0].scrollHeight);
+			}, 30);
+		}
+
 		function formatMessage(text) {
-			// Replace **bold** with <strong>bold</strong>
+			if (typeof text !== 'string') return 'Respuesta inválida del servidor';
+
+			text = escapeHTML(text);
+
 			text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-			// Replace line breaks with <br>
 			text = text.replace(/\n/g, '<br>');
-			// Replace - or * at start of line with bullet
 			text = text.replace(/^[-*]\s+(.*)$/gm, '<li>$1</li>');
-			// Wrap consecutive <li> in <ul>
-			text = text.replace(/(<li>.*<\/li>\s*)+/g, '<ul>$&</ul>');
+
+			if (!text.includes('<ul>')) {
+				text = text.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+			}
+
 			return text;
 		}
 
-		// Send message
+		$toggle.on('click', function () {
+			$widget.show();
+			$toggle.hide();
+			$input.focus();
+		});
+
+		$('#chatbot-close').on('click', function () {
+			$widget.hide();
+			$toggle.show();
+		});
+
 		function sendMessage() {
-			var message = $('#chatbot-input').val().trim();
-			if (!message) return;
+			if (enviando) return;
 
-			// Add user message
-			$('#chatbot-messages').append('<div class="chatbot-message user">' + message + '</div>');
-			$('#chatbot-input').val('');
-			$('#chatbot-messages').scrollTop($('#chatbot-messages')[0].scrollHeight);
+			const rawMessage = $input.val().trim();
+			if (!rawMessage) return;
 
-			// Show typing indicator
-			$('#chatbot-typing').show();
-			$('#chatbot-messages').scrollTop($('#chatbot-messages')[0].scrollHeight);
+			enviando = true;
+			$send.prop('disabled', true);
 
-			// Get current post ID
-			var postId = typeof chatbot_post_id !== 'undefined' ? chatbot_post_id.id : 0;
+			$messages.append(
+				'<div class="chatbot-message user">' + escapeHTML(rawMessage) + '</div>'
+			);
 
-			// Send to server
+			$input.val('');
+			scrollBottom();
+
+			$messages.append(`
+				<div class="chatbot-typing" id="chatbot-typing">
+					<div class="dots"><span></span><span></span><span></span></div>
+				</div>
+			`);
+			scrollBottom();
+
+			const postId = (window.chatbot_post_id && chatbot_post_id.id)
+				? chatbot_post_id.id
+				: 0;
+
 			$.ajax({
 				url: chatbot_ajax.ajax_url,
-				type: 'POST',
+				method: 'POST',
+				dataType: 'json',
 				data: {
 					action: 'chatbot_send_message',
-					message: message,
+					message: rawMessage,
 					post_id: postId,
 					nonce: chatbot_ajax.nonce
-				},
-				success: function(response) {
-					// Hide typing indicator
-					$('#chatbot-typing').hide();
-					if (response.success) {
-						var formattedResponse = formatMessage(response.data.response);
-						$('#chatbot-messages').append('<div class="chatbot-message bot">' + formattedResponse + '</div>');
-						$('#chatbot-messages').scrollTop($('#chatbot-messages')[0].scrollHeight);
-					} else {
-						$('#chatbot-messages').append('<div class="chatbot-message bot">Error: ' + response.data + '</div>');
-					}
-				},
-				error: function() {
-					// Hide typing indicator
-					$('#chatbot-typing').hide();
-					$('#chatbot-messages').append('<div class="chatbot-message bot">Error al enviar mensaje.</div>');
 				}
+			})
+			.done(function (response) {
+				$('#chatbot-typing').remove();
+
+				if (response && response.success && response.data) {
+					const botText = response.data.response;
+					const formatted = formatMessage(botText);
+
+					$messages.append(
+						'<div class="chatbot-message bot">' + formatted + '</div>'
+					);
+				} else {
+					$messages.append(
+						'<div class="chatbot-message bot">Error al procesar la respuesta.</div>'
+					);
+				}
+
+				scrollBottom();
+			})
+			.fail(function () {
+				$('#chatbot-typing').remove();
+				$messages.append(
+					'<div class="chatbot-message bot">Error de conexión con el servidor.</div>'
+				);
+				scrollBottom();
+			})
+			.always(function () {
+				enviando = false;
+				$send.prop('disabled', false);
+				$input.focus();
 			});
 		}
 
-		$('#chatbot-send').on('click', sendMessage);
-		$('#chatbot-input').on('keypress', function(e) {
-			if (e.which == 13) sendMessage();
-		});
-	});
+		$send.on('click', sendMessage);
 
-})( jQuery );
+		$input.on('keydown', function (e) {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				sendMessage();
+			}
+		});
+
+	});
+})(jQuery);
