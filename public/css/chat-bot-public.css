@@ -15,7 +15,6 @@
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     z-index: 9999;
     display: none;
-    flex-direction: column;
     font-family: Arial, sans-serif;
     overflow: hidden;
 }
@@ -34,6 +33,9 @@
     cursor: pointer;
     z-index: 10000;
     box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .chatbot-header {
@@ -45,7 +47,7 @@
 }
 
 .chatbot-messages {
-    flex: 1;
+    height: calc(100% - 60px - 80px); /* header 60px, input 80px approx */
     padding: 15px;
     overflow-y: auto;
     background: #fff5f5;
@@ -70,9 +72,14 @@
 }
 
 .chatbot-input-area {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
     padding: 15px;
     border-top: 1px solid #ddd;
     display: flex;
+    background: #fff;
 }
 
 .chatbot-input {

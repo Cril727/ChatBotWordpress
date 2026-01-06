@@ -225,7 +225,7 @@ class Chat_Bot_Chat {
 
         if (is_wp_error($response)) {
             error_log('ChatBot Debug: WP Error in OpenAI call: ' . $response->get_error_message());
-            return 'Error al generar respuesta.';
+            return $this->generate_basic_response($message, $context);
         }
 
         $body = json_decode(wp_remote_retrieve_body($response), true);
@@ -234,9 +234,16 @@ class Chat_Bot_Chat {
 
         if (isset($body['error'])) {
             error_log('ChatBot Debug: OpenAI API error: ' . $body['error']['message']);
+            return $this->generate_basic_response($message, $context);
         }
 
-        return $body['choices'][0]['message']['content'] ?? 'No pude generar una respuesta.';
+        $content = $body['choices'][0]['message']['content'] ?? null;
+        if ($content === null) {
+            error_log('ChatBot Debug: No content in OpenAI response');
+            return $this->generate_basic_response($message, $context);
+        }
+
+        return $content;
     }
 
     /**
@@ -292,21 +299,19 @@ class Chat_Bot_Chat {
         });
 
         if (!empty($found_posts)) {
-            $response = "Basándome en el contenido del sitio web, encontré esta información relevante:\n\n";
-            // Show top 2 most relevant posts/pages
-            for ($i = 0; $i < min(2, count($found_posts)); $i++) {
-                $content = $found_posts[$i]['content'];
-                // Extract title and content
-                if (strpos($content, ': ') !== false) {
-                    list($title, $body) = explode(': ', $content, 2);
-                    $response .= "**" . $title . "**\n" . substr($body, 0, 200) . "...\n\n";
-                } else {
-                    $response .= substr($content, 0, 300) . "...\n\n";
-                }
+            $response = "¡Hola! Encontré algo interesante en nuestro sitio:\n\n";
+            // Show top 1 most relevant post/page
+            $content = $found_posts[0]['content'];
+            // Extract title and content
+            if (strpos($content, ': ') !== false) {
+                list($title, $body) = explode(': ', $content, 2);
+                $response .= "**" . $title . "**\n" . substr($body, 0, 150) . "...\n\n¿Te gustaría saber más?";
+            } else {
+                $response .= substr($content, 0, 200) . "...\n\n¿Te ayudo con algo más?";
             }
             return $response;
         }
 
-        return 'Lo siento, no encontré información específica sobre tu pregunta en el contenido del sitio web. El sitio contiene información sobre: ' . substr($context, 0, 200) . '... ¿Puedes ser más específico?';
+        return '¡Hola! No encontré información exacta sobre eso, pero nuestro sitio tiene contenido interesante. ¿Puedes contarme más sobre lo que buscas?';
     }
 }
