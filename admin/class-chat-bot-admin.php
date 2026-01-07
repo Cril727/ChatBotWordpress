@@ -127,11 +127,7 @@ class Chat_Bot_Admin {
 		register_setting( 'chatbot_settings', 'chatbot_openai_model' );
 		register_setting( 'chatbot_settings', 'chatbot_google_api_key' );
 		register_setting( 'chatbot_settings', 'chatbot_google_model' );
-		register_setting( 'chatbot_settings', 'chatbot_db_host' );
-		register_setting( 'chatbot_settings', 'chatbot_db_user' );
-		register_setting( 'chatbot_settings', 'chatbot_db_pass' );
-		register_setting( 'chatbot_settings', 'chatbot_db_name' );
-		register_setting( 'chatbot_settings', 'chatbot_custom_queries' );
+		register_setting( 'chatbot_settings', 'chatbot_custom_queries', array( $this, 'sanitize_custom_queries' ) );
 
 		add_settings_section(
 			'chatbot_main_section',
@@ -180,44 +176,6 @@ class Chat_Bot_Admin {
 			'chatbot_main_section'
 		);
 
-		add_settings_section(
-			'chatbot_db_section',
-			'Configuración de Base de Datos MySQL',
-			null,
-			'chatbot_settings'
-		);
-
-		add_settings_field(
-			'db_host',
-			'Host de DB',
-			array( $this, 'db_host_field_callback' ),
-			'chatbot_settings',
-			'chatbot_db_section'
-		);
-
-		add_settings_field(
-			'db_user',
-			'Usuario DB',
-			array( $this, 'db_user_field_callback' ),
-			'chatbot_settings',
-			'chatbot_db_section'
-		);
-
-		add_settings_field(
-			'db_pass',
-			'Contraseña DB',
-			array( $this, 'db_pass_field_callback' ),
-			'chatbot_settings',
-			'chatbot_db_section'
-		);
-
-		add_settings_field(
-			'db_name',
-			'Nombre de DB',
-			array( $this, 'db_name_field_callback' ),
-			'chatbot_settings',
-			'chatbot_db_section'
-		);
 
 		add_settings_section(
 			'chatbot_queries_section',
@@ -288,8 +246,12 @@ class Chat_Bot_Admin {
 	 */
 	public function google_model_field_callback() {
 		$value = get_option( 'chatbot_google_model', 'gemini-2.5-flash' );
-		echo '<input type="text" name="chatbot_google_model" value="' . esc_attr( $value ) . '" size="50" />';
-		echo '<p class="description">Ingresa el nombre del modelo de Google AI (por defecto: gemini-2.5-flash).</p>';
+		echo '<select name="chatbot_google_model">';
+		echo '<option value="gemini-pro" ' . selected( $value, 'gemini-pro', false ) . '>Gemini Pro</option>';
+		echo '<option value="gemini-1.5-flash" ' . selected( $value, 'gemini-1.5-flash', false ) . '>Gemini 1.5 Flash</option>';
+		echo '<option value="gemini-2.5-flash" ' . selected( $value, 'gemini-2.5-flash', false ) . '>Gemini 2.5 Flash</option>';
+		echo '</select>';
+		echo '<p class="description">Selecciona el modelo de Google AI a usar.</p>';
 	}
 
 	/**
@@ -305,43 +267,12 @@ class Chat_Bot_Admin {
 		echo '<p class="description">Selecciona el modelo de OpenAI a usar.</p>';
 	}
 
-	/**
-	 * DB host field
-	 */
-	public function db_host_field_callback() {
-		$value = get_option( 'chatbot_db_host', DB_HOST );
-		echo '<input type="text" name="chatbot_db_host" value="' . esc_attr( $value ) . '" size="50" />';
-	}
-
-	/**
-	 * DB user field
-	 */
-	public function db_user_field_callback() {
-		$value = get_option( 'chatbot_db_user', DB_USER );
-		echo '<input type="text" name="chatbot_db_user" value="' . esc_attr( $value ) . '" size="50" />';
-	}
-
-	/**
-	 * DB pass field
-	 */
-	public function db_pass_field_callback() {
-		$value = get_option( 'chatbot_db_pass', DB_PASSWORD );
-		echo '<input type="password" name="chatbot_db_pass" value="' . esc_attr( $value ) . '" size="50" />';
-	}
-
-	/**
-	 * DB name field
-	 */
-	public function db_name_field_callback() {
-		$value = get_option( 'chatbot_db_name', DB_NAME );
-		echo '<input type="text" name="chatbot_db_name" value="' . esc_attr( $value ) . '" size="50" />';
-	}
 
 	/**
 	 * Queries section
 	 */
 	public function queries_section_callback() {
-		echo '<p>Define consultas SQL personalizadas que el chatbot puede ejecutar. Solo SELECT permitidas por seguridad.</p>';
+		echo '<p>Define consultas SQL personalizadas que el chatbot puede ejecutar en la base de datos de WordPress. Solo SELECT permitidas por seguridad, y no se permiten * ni consultas peligrosas.</p>';
 	}
 
 	/**
@@ -351,6 +282,33 @@ class Chat_Bot_Admin {
 		$value = get_option( 'chatbot_custom_queries' );
 		echo '<textarea name="chatbot_custom_queries" rows="10" cols="50">' . esc_textarea( $value ) . '</textarea>';
 		echo '<p class="description">Una consulta por línea. Ejemplo:<br>SELECT name, email FROM users WHERE active = 1</p>';
+	}
+
+	/**
+	 * Sanitize custom queries
+	 */
+	public function sanitize_custom_queries( $input ) {
+		if ( empty( $input ) ) {
+			return $input;
+		}
+
+		$queries = array_filter( array_map( 'trim', explode( "\n", $input ) ) );
+		$sanitized = [];
+
+		foreach ( $queries as $query ) {
+			$query = trim( $query );
+			if ( ! preg_match( '/^SELECT/i', $query ) ) {
+				add_settings_error( 'chatbot_custom_queries', 'invalid_query', 'Solo consultas SELECT son permitidas: ' . esc_html( $query ) );
+				continue;
+			}
+			if ( preg_match( '/\b(SELECT\s+\*|\bUNION\b|\bINFORMATION_SCHEMA\b|\bMYSQL\b|\bPERFORMANCE_SCHEMA\b|\bSYS\b)/i', $query ) ) {
+				add_settings_error( 'chatbot_custom_queries', 'dangerous_query', 'Consulta potencialmente peligrosa no permitida: ' . esc_html( $query ) );
+				continue;
+			}
+			$sanitized[] = $query;
+		}
+
+		return implode( "\n", $sanitized );
 	}
 
 }

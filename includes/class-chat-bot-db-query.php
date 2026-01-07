@@ -17,12 +17,8 @@ class Chat_Bot_DB_Query {
     }
 
     private function connect() {
-        $host = get_option('chatbot_db_host', DB_HOST);
-        $user = get_option('chatbot_db_user', DB_USER);
-        $pass = get_option('chatbot_db_pass', DB_PASSWORD);
-        $db = get_option('chatbot_db_name', DB_NAME);
-
-        $this->connection = new mysqli($host, $user, $pass, $db);
+        // Use WordPress database constants for security
+        $this->connection = new mysqli(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME);
         if ($this->connection->connect_error) {
             error_log('ChatBot DB Connection failed: ' . $this->connection->connect_error);
             $this->connection = null;
@@ -35,8 +31,24 @@ class Chat_Bot_DB_Query {
     public function execute_safe_query($query, $params = []) {
         if (!$this->connection) return false;
 
+        $query = trim($query);
+
         // Only allow SELECT queries for security
-        if (!preg_match('/^SELECT/i', trim($query))) {
+        if (!preg_match('/^SELECT/i', $query)) {
+            return false;
+        }
+
+        // Additional security checks to prevent data exposure
+        if (stripos($query, 'union') !== false ||
+            stripos($query, 'information_schema') !== false ||
+            stripos($query, 'mysql') !== false ||
+            stripos($query, 'performance_schema') !== false ||
+            stripos($query, 'sys') !== false) {
+            return false;
+        }
+
+        // Disallow SELECT * to prevent accidental exposure
+        if (preg_match('/\bSELECT\s+\*/i', $query)) {
             return false;
         }
 
