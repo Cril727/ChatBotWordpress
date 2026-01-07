@@ -4,25 +4,36 @@
 	$(function () {
 
 		$('body').append(`
-			<div class="chatbot-toggle" id="chatbot-toggle">💬</div>
-			<div class="chatbot-widget" id="chatbot-widget">
-				<div class="chatbot-header">
-					Chatbot
-					<button id="chatbot-close" style="float:right; background:none; border:none; color:white; font-size:20px;">×</button>
-				</div>
-				<div class="chatbot-messages" id="chatbot-messages"></div>
-				<div class="chatbot-input-area">
-					<input type="text" class="chatbot-input" id="chatbot-input" placeholder="Escribe tu mensaje...">
-					<button class="chatbot-send" id="chatbot-send">Enviar</button>
+			<div id="neurorag-bot-widget" class="neurorag-bot-pos-bottom-right">
+				<button id="neurorag-bot-button">💬</button>
+				<div id="neurorag-bot-container" style="display: none;">
+					<div id="neurorag-bot-header">
+						Chatbot
+						<div id="neurorag-bot-controls">
+							<button id="neurorag-bot-theme-toggle">🌙</button>
+							<button id="neurorag-bot-close">×</button>
+						</div>
+					</div>
+					<div id="neurorag-bot-messages"></div>
+					<div id="neurorag-bot-input-area">
+						<input type="text" id="neurorag-bot-input" placeholder="Escribe tu mensaje...">
+						<button id="neurorag-bot-send">
+							<svg viewBox="0 0 24 24">
+								<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+							</svg>
+						</button>
+					</div>
 				</div>
 			</div>
 		`);
 
-		const $widget = $('#chatbot-widget');
-		const $toggle = $('#chatbot-toggle');
-		const $messages = $('#chatbot-messages');
-		const $input = $('#chatbot-input');
-		const $send = $('#chatbot-send');
+		const $widget = $('#neurorag-bot-widget');
+		const $button = $('#neurorag-bot-button');
+		const $container = $('#neurorag-bot-container');
+		const $messages = $('#neurorag-bot-messages');
+		const $input = $('#neurorag-bot-input');
+		const $send = $('#neurorag-bot-send');
+		const $themeToggle = $('#neurorag-bot-theme-toggle');
 
 		let enviando = false;
 
@@ -52,15 +63,21 @@
 			return text;
 		}
 
-		$toggle.on('click', function () {
-			$widget.show();
-			$toggle.hide();
+		$button.on('click', function () {
+			$container.show();
+			$button.hide();
 			$input.focus();
 		});
 
-		$('#chatbot-close').on('click', function () {
-			$widget.hide();
-			$toggle.show();
+		$('#neurorag-bot-close').on('click', function () {
+			$container.hide();
+			$button.show();
+		});
+
+		$themeToggle.on('click', function () {
+			$widget.toggleClass('neurorag-theme-dark');
+			const isDark = $widget.hasClass('neurorag-theme-dark');
+			$themeToggle.text(isDark ? '☀️' : '🌙');
 		});
 
 		function sendMessage() {
@@ -73,15 +90,17 @@
 			$send.prop('disabled', true);
 
 			$messages.append(
-				'<div class="chatbot-message user">' + escapeHTML(rawMessage) + '</div>'
+				'<div class="neurorag-bot-message user"><div class="neurorag-bot-message-content">' + escapeHTML(rawMessage) + '</div></div>'
 			);
 
 			$input.val('');
 			scrollBottom();
 
 			$messages.append(`
-				<div class="chatbot-typing" id="chatbot-typing">
-					<div class="dots"><span></span><span></span><span></span></div>
+				<div class="neurorag-bot-message bot">
+					<div class="neurorag-bot-typing" id="neurorag-bot-typing">
+						<span></span><span></span><span></span>
+					</div>
 				</div>
 			`);
 			scrollBottom();
@@ -102,27 +121,27 @@
 				}
 			})
 			.done(function (response) {
-				$('#chatbot-typing').remove();
+				$('#neurorag-bot-typing').parent().remove();
 
 				if (response && response.success && response.data) {
 					const botText = response.data.response;
 					const formatted = formatMessage(botText);
 
 					$messages.append(
-						'<div class="chatbot-message bot">' + formatted + '</div>'
+						'<div class="neurorag-bot-message bot"><div class="neurorag-bot-message-content">' + formatted + '</div></div>'
 					);
 				} else {
 					$messages.append(
-						'<div class="chatbot-message bot">Error al procesar la respuesta.</div>'
+						'<div class="neurorag-bot-message bot"><div class="neurorag-bot-message-content">Error al procesar la respuesta.</div></div>'
 					);
 				}
 
 				scrollBottom();
 			})
 			.fail(function () {
-				$('#chatbot-typing').remove();
+				$('#neurorag-bot-typing').parent().remove();
 				$messages.append(
-					'<div class="chatbot-message bot">Error de conexión con el servidor.</div>'
+					'<div class="neurorag-bot-message bot"><div class="neurorag-bot-message-content">Error de conexión con el servidor.</div></div>'
 				);
 				scrollBottom();
 			})
