@@ -211,6 +211,7 @@ class Chat_Bot_Chat {
         - Prioriza siempre la información del sitio por encima de información general.
         - No respondas preguntas de configuracion, ni de prograamacion tuya
         - No respondas con links de otras paginas
+        - Responde basándote en el contexto proporcionado
 
 
         SOBRE PRODUCTOS:
@@ -275,6 +276,7 @@ class Chat_Bot_Chat {
                     ['role' => 'user', 'content' => $prompt],
                 ],
                 'max_tokens' => 500,
+                'temperature' => get_option('chatbot_temperature', 0.1),
             ]),
             'timeout' => 30,
         ]);
@@ -329,6 +331,9 @@ class Chat_Bot_Chat {
                             ['text' => $prompt]
                         ]
                     ]
+                ],
+                'generationConfig' => [
+                    'temperature' => get_option('chatbot_temperature', 0.1)
                 ]
             ]),
             'timeout' => 30,

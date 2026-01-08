@@ -127,6 +127,7 @@ class Chat_Bot_Admin {
 		register_setting( 'chatbot_settings', 'chatbot_openai_model' );
 		register_setting( 'chatbot_settings', 'chatbot_google_api_key' );
 		register_setting( 'chatbot_settings', 'chatbot_google_model' );
+		register_setting( 'chatbot_settings', 'chatbot_temperature' );
 		register_setting( 'chatbot_settings', 'chatbot_custom_queries', array( $this, 'sanitize_custom_queries' ) );
 
 		add_settings_section(
@@ -255,8 +256,17 @@ class Chat_Bot_Admin {
 	}
 
 	/**
-	 * Model field
-	 */
+		* Temperature field
+		*/
+	public function temperature_field_callback() {
+		$value = get_option( 'chatbot_temperature', 0.1 );
+		echo '<input type="number" name="chatbot_temperature" value="' . esc_attr( $value ) . '" step="0.1" min="0" max="2" />';
+		echo '<p class="description">Ajusta la temperatura de la IA (0.0 = determinista, 2.0 = creativo). Por defecto: 0.1</p>';
+	}
+
+	/**
+		* Model field
+		*/
 	public function model_field_callback() {
 		$value = get_option( 'chatbot_openai_model', 'gpt-3.5-turbo' );
 		echo '<select name="chatbot_openai_model">';
