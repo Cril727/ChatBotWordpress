@@ -195,7 +195,19 @@ class Chat_Bot_Chat {
             $context .= $chunk['chunk'] . "\n";
         }
 
-        $prompt = "Contexto del sitio web:\n" . $context . "\n\nPregunta del usuario: " . $message . "\n\nResponde basándote en el contexto proporcionado.";
+        $prompt = "
+          SOBRE PRODUCTOS:
+        - Describe productos SOLO si el sitio es de comercio electrónico.
+        - Incluye únicamente características, beneficios y precios cuando estén disponibles en el contexto.
+        - No inventes información de productos.
+        - Cuando sea útil, incluye enlaces a páginas o productos del mismo sitio para guiar al usuario, nunca de otros comercios.
+
+        OBJETIVO:
+        - Ayudar al usuario a encontrar información rápidamente.
+        - Facilitar la navegación del sitio.
+        - Incentivar la exploración del contenido y, si aplica, la compra de productos.
+        
+        Contexto del sitio web:\n {$context} \n\nPregunta del usuario: {$message} \n\nResponde basándote en el contexto proporcionado.";
 
         // Try Google first if key is set
         $google_key = get_option('chatbot_google_api_key');
