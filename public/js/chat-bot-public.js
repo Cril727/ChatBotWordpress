@@ -109,6 +109,10 @@
 				? chatbot_post_id.id
 				: 0;
 
+			const currentUrl = (window.chatbot_current_url && chatbot_current_url.url)
+				? chatbot_current_url.url
+				: '';
+
 			$.ajax({
 				url: chatbot_ajax.ajax_url,
 				method: 'POST',
@@ -117,6 +121,7 @@
 					action: 'chatbot_send_message',
 					message: rawMessage,
 					post_id: postId,
+					current_url: currentUrl,
 					nonce: chatbot_ajax.nonce
 				}
 			})

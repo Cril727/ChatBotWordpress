@@ -108,6 +108,9 @@ class Chat_Bot_Public {
 			wp_localize_script( $this->plugin_name, 'chatbot_post_id', array( 'id' => get_the_ID() ) );
 		}
 
+		// Pass current URL
+		wp_localize_script( $this->plugin_name, 'chatbot_current_url', array( 'url' => home_url( add_query_arg( null, null ) ) ) );
+
 	}
 
 	/**
@@ -118,13 +121,14 @@ class Chat_Bot_Public {
 
 		$message = sanitize_text_field($_POST['message'] ?? '');
 		$current_post_id = intval($_POST['post_id'] ?? 0);
+		$current_url = sanitize_text_field($_POST['current_url'] ?? '');
 
 		if (empty($message)) {
 			wp_send_json_error('Mensaje vacío');
 		}
 
 		$chat = new Chat_Bot_Chat();
-		$response = $chat->process_message($message, $current_post_id);
+		$response = $chat->process_message($message, $current_post_id, $current_url);
 
 		wp_send_json_success(['response' => $response]);
 	}

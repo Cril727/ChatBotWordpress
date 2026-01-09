@@ -76,8 +76,45 @@ class Chat_Bot_Indexer {
             }
         }
 
+        // Index WooCommerce products if active
+        if (class_exists('WooCommerce')) {
+            $this->index_woocommerce_products();
+        }
+
         // Index custom DB queries
         $this->index_custom_db_queries();
+    }
+
+    /**
+     * Index WooCommerce products if active
+     */
+    private function index_woocommerce_products() {
+        $products = wc_get_products(array(
+            'status' => 'publish',
+            'limit' => -1, // All products
+        ));
+
+        foreach ($products as $product) {
+            $this->delete_embeddings('product', $product->get_id());
+
+            $content = $product->get_name() . ' ' . $product->get_description() . ' ' . $product->get_short_description();
+            $content .= ' Precio: ' . $product->get_price() . ' ' . get_woocommerce_currency_symbol();
+
+            if ($product->is_type('variable')) {
+                $variations = $product->get_available_variations();
+                foreach ($variations as $variation) {
+                    $content .= ' Variación: ' . $variation['attributes'] . ' Precio: ' . $variation['display_price'];
+                }
+            }
+
+            $chunks = $this->chunk_text($content);
+            foreach ($chunks as $chunk) {
+                $embedding = $this->generate_embedding($chunk);
+                if ($embedding) {
+                    $this->store_embedding('product', $product->get_id(), $chunk, $embedding);
+                }
+            }
+        }
     }
 
     /**

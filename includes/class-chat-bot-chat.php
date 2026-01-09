@@ -18,9 +18,57 @@ class Chat_Bot_Chat {
     }
 
     /**
+     * Check if the site is an e-commerce site
+     */
+    private function is_ecommerce_site() {
+        return class_exists('WooCommerce');
+    }
+
+    /**
+     * Search for products by name and return links
+     */
+    private function search_products($query) {
+        if (!$this->is_ecommerce_site()) return [];
+
+        $products = wc_get_products(array(
+            's' => $query,
+            'status' => 'publish',
+            'limit' => 5,
+        ));
+
+        $results = [];
+        foreach ($products as $product) {
+            $results[] = [
+                'name' => $product->get_name(),
+                'url' => get_permalink($product->get_id()),
+                'price' => $product->get_price(),
+            ];
+        }
+
+        return $results;
+    }
+
+    /**
+     * Extract URLs from message
+     */
+    private function extract_urls($message) {
+        $pattern = '/\bhttps?:\/\/[^\s]+/i';
+        preg_match_all($pattern, $message, $matches);
+        return $matches[0] ?? [];
+    }
+
+    /**
+     * Check if URL is internal to the site
+     */
+    private function is_internal_url($url) {
+        $site_url = get_site_url();
+        return strpos($url, $site_url) === 0;
+    }
+
+    /**
      * Process a chat message and return response
      */
-    public function process_message($message, $current_post_id = null) {
+    public function process_message($message, $current_post_id = null, $current_url = '') {
         $api_key = get_option('chatbot_openai_api_key');
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Processing message: ' . $message . ', Post ID: ' . $current_post_id);
         $relevant_chunks = [];
@@ -41,6 +89,23 @@ class Chat_Bot_Chat {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: No API key, skipping embeddings');
         }
 
+        // Check for URLs in message
+        $message_urls = $this->extract_urls($message);
+        if (!empty($message_urls)) {
+            foreach ($message_urls as $url) {
+                if ($this->is_internal_url($url)) {
+                    $post_id = url_to_postid($url);
+                    if ($post_id) {
+                        $post = get_post($post_id);
+                        if ($post) {
+                            $additional_content = $post->post_title . ': ' . wp_strip_all_tags($post->post_content);
+                            $relevant_chunks[] = ['chunk' => $additional_content, 'similarity' => 1.0, 'source_type' => 'url', 'source_id' => $post_id];
+                        }
+                    }
+                }
+            }
+        }
+
         // If no relevant chunks found or no API key, use site-wide content as fallback
         if (empty($relevant_chunks)) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Using site content fallback');
@@ -51,7 +116,7 @@ class Chat_Bot_Chat {
         }
 
         // Generate response using AI or basic fallback
-        return $this->generate_response($message, $relevant_chunks);
+        return $this->generate_response($message, $relevant_chunks, $current_url);
     }
 
     /**
@@ -188,26 +253,33 @@ class Chat_Bot_Chat {
     /**
      * Generate response using OpenAI Chat Completion
      */
-    private function generate_response($message, $relevant_chunks) {
+    private function generate_response($message, $relevant_chunks, $current_url = '') {
         // Build context
         $context = '';
         foreach ($relevant_chunks as $chunk) {
             $context .= $chunk['chunk'] . "\n";
         }
 
-        $prompt = "
-          SOBRE PRODUCTOS:
-        - Describe productos SOLO si el sitio es de comercio electrónico.
-        - Incluye únicamente características, beneficios y precios cuando estén disponibles en el contexto.
-        - No inventes información de productos.
-        - Cuando sea útil, incluye enlaces a páginas o productos del mismo sitio para guiar al usuario, nunca de otros comercios.
+        $is_ecommerce = $this->is_ecommerce_site();
+        $site_type = $is_ecommerce ? 'comercio electrónico' : 'sitio web general';
+        $current_page_info = !empty($current_url) ? "Página actual: {$current_url}" : '';
 
-        OBJETIVO:
-        - Ayudar al usuario a encontrar información rápidamente.
-        - Facilitar la navegación del sitio.
-        - Incentivar la exploración del contenido y, si aplica, la compra de productos.
-        
-        Contexto del sitio web:\n {$context} \n\nPregunta del usuario: {$message} \n\nResponde basándote en el contexto proporcionado.";
+        $prompt = "
+           SOBRE PRODUCTOS:
+         - Este sitio es un {$site_type}.
+         - Describe productos SOLO si el sitio es de comercio electrónico.
+         - Incluye únicamente características, beneficios y precios cuando estén disponibles en el contexto.
+         - No inventes información de productos.
+         - Cuando sea útil, incluye enlaces directos a páginas o productos del mismo sitio para guiar al usuario, nunca de otros comercios.
+         - Para consultas específicas sobre productos, proporciona el enlace directo al producto si está disponible en el contexto.
+
+         OBJETIVO:
+         - Ayudar al usuario a encontrar información rápidamente.
+         - Facilitar la navegación del sitio.
+         - Incentivar la exploración del contenido y, si aplica, la compra de productos.
+         {$current_page_info}
+
+         Contexto del sitio web:\n {$context} \n\nPregunta del usuario: {$message} \n\nResponde basándote en el contexto proporcionado.";
 
         // Try Google first if key is set
         $google_key = get_option('chatbot_google_api_key');
@@ -231,7 +303,7 @@ class Chat_Bot_Chat {
 
         // Fallback to basic
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Using basic response');
-        return $this->generate_basic_response($message, $context);
+        return $this->generate_basic_response($message, $context, $current_url);
     }
 
     private function generate_openai_response($prompt, $message, $context) {
@@ -345,7 +417,7 @@ class Chat_Bot_Chat {
     /**
      * Generate a basic response when API key is not available
      */
-    private function generate_basic_response($message, $context) {
+    private function generate_basic_response($message, $context, $current_url = '') {
         // Simple keyword-based response generation
         $message_lower = strtolower($message);
         $context_lower = strtolower($context);
@@ -393,6 +465,19 @@ class Chat_Bot_Chat {
         usort($found_posts, function($a, $b) {
             return $b['score'] <=> $a['score'];
         });
+
+        // Check for product queries
+        if ($this->is_ecommerce_site()) {
+            $products = $this->search_products($message_lower);
+            if (!empty($products)) {
+                $response = "¡Hola! Encontré algunos productos relacionados:\n\n";
+                foreach ($products as $product) {
+                    $response .= "**" . $product['name'] . "** - Precio: $" . $product['price'] . "\nEnlace: " . $product['url'] . "\n\n";
+                }
+                $response .= "¿Te interesa alguno de estos productos?";
+                return $response;
+            }
+        }
 
         if (!empty($found_posts)) {
             $response = "¡Hola! Encontré algo interesante en nuestro sitio:\n\n";
