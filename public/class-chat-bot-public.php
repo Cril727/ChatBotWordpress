@@ -39,6 +39,10 @@ class Chat_Bot_Public {
 	 * @var      string    $version    The current version of this plugin.
 	 */
 	private $version;
+	private const RATE_LIMIT_PER_MINUTE = 5;
+	private const RATE_LIMIT_BURST = 3;
+	private const RATE_LIMIT_BURST_WINDOW = 10;
+	private const RATE_LIMIT_MESSAGE_MAX = 1000;
 
 	/**
 	 * Initialize the class and set its properties.
@@ -144,19 +148,91 @@ class Chat_Bot_Public {
 	public function handle_chat_message() {
 		check_ajax_referer('chatbot_nonce', 'nonce');
 
-		$message = sanitize_text_field($_POST['message'] ?? '');
+		$raw_message = isset($_POST['message']) ? wp_unslash($_POST['message']) : '';
+		$message = sanitize_text_field($raw_message);
 		$current_post_id = intval($_POST['post_id'] ?? 0);
 		$current_url = sanitize_text_field($_POST['current_url'] ?? '');
 		$session_id = sanitize_text_field($_POST['session_id'] ?? '');
 
+		if ($this->message_too_long($raw_message)) {
+			wp_send_json_error('El mensaje excede los 1000 caracteres permitidos.');
+		}
+
 		if (empty($message)) {
 			wp_send_json_error('Mensaje vacío');
+		}
+
+		if (!$this->check_rate_limit($session_id)) {
+			wp_send_json_error('Demasiadas solicitudes. Intenta de nuevo en unos segundos.');
 		}
 
 		$chat = new Chat_Bot_Chat();
 		$response = $chat->process_message($message, $current_post_id, $current_url, $session_id);
 
 		wp_send_json_success(['response' => $response]);
+	}
+
+	private function message_too_long($message) {
+		$message = trim((string) $message);
+		if ($message === '') {
+			return false;
+		}
+
+		if (function_exists('mb_strlen')) {
+			return mb_strlen($message) > self::RATE_LIMIT_MESSAGE_MAX;
+		}
+
+		return strlen($message) > self::RATE_LIMIT_MESSAGE_MAX;
+	}
+
+	private function check_rate_limit($session_id) {
+		if (is_user_logged_in()) {
+			return true;
+		}
+
+		$identifier = $this->get_rate_limit_identifier($session_id);
+		if ($identifier === '') {
+			return true;
+		}
+
+		$key = 'chatbot_rl_' . md5($identifier);
+
+		if (!$this->check_rate_limit_bucket($key . '_m', self::RATE_LIMIT_PER_MINUTE, MINUTE_IN_SECONDS)) {
+			return false;
+		}
+
+		if (!$this->check_rate_limit_bucket($key . '_b', self::RATE_LIMIT_BURST, self::RATE_LIMIT_BURST_WINDOW)) {
+			return false;
+		}
+
+		return true;
+	}
+
+	private function check_rate_limit_bucket($key, $limit, $ttl) {
+		$count = (int) get_transient($key);
+		if ($count >= $limit) {
+			return false;
+		}
+
+		$count++;
+		set_transient($key, $count, $ttl);
+		return true;
+	}
+
+	private function get_rate_limit_identifier($session_id) {
+		if (!empty($session_id)) {
+			return $session_id;
+		}
+
+		$ip = '';
+		if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+			$forwarded = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+			$ip = trim($forwarded[0]);
+		} elseif (!empty($_SERVER['REMOTE_ADDR'])) {
+			$ip = $_SERVER['REMOTE_ADDR'];
+		}
+
+		return sanitize_text_field($ip);
 	}
 
 }
