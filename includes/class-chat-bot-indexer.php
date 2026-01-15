@@ -11,6 +11,7 @@
 class Chat_Bot_Indexer {
 
     private $table_name;
+    private $last_embedding_error = '';
 
     public function __construct() {
         global $wpdb;
@@ -73,7 +74,11 @@ class Chat_Bot_Indexer {
      */
     public function index_document($source_id, $text, $source_type = 'file', $max_chunks = 0) {
         if (empty($text)) {
-            return 0;
+            return array(
+                'chunks_total' => 0,
+                'chunks_embedded' => 0,
+                'error' => 'El contenido del archivo esta vacio.',
+            );
         }
 
         $this->delete_embeddings($source_type, $source_id);
@@ -83,16 +88,27 @@ class Chat_Bot_Indexer {
             $chunks = array_slice($chunks, 0, $max_chunks);
         }
 
+        $total = count($chunks);
         $count = 0;
+        $last_error = '';
         foreach ($chunks as $chunk) {
             $embedding = $this->generate_embedding($chunk);
             if ($embedding) {
                 $this->store_embedding($source_type, $source_id, $chunk, $embedding);
                 $count++;
+            } else {
+                $last_error = $this->last_embedding_error;
+                if (!empty($last_error)) {
+                    break;
+                }
             }
         }
 
-        return $count;
+        return array(
+            'chunks_total' => $total,
+            'chunks_embedded' => $count,
+            'error' => $last_error,
+        );
     }
 
     /**
@@ -277,8 +293,15 @@ class Chat_Bot_Indexer {
      * Generate embedding using OpenAI API
      */
     private function generate_embedding($text) {
+        $this->last_embedding_error = '';
         $api_key = get_option('chatbot_openai_api_key');
-        if (!$api_key) return false;
+        if (!$api_key) {
+            $this->last_embedding_error = 'Falta la clave de OpenAI.';
+            return false;
+        }
+
+        $model = get_option('chatbot_openai_embedding_model', 'text-embedding-3-small');
+        $model = apply_filters('chatbot_openai_embedding_model', $model);
 
         $response = wp_remote_post('https://api.openai.com/v1/embeddings', [
             'headers' => [
@@ -286,16 +309,34 @@ class Chat_Bot_Indexer {
                 'Content-Type' => 'application/json',
             ],
             'body' => json_encode([
-                'model' => 'text-embedding-ada-002',
+                'model' => $model,
                 'input' => $text,
             ]),
             'timeout' => 30,
         ]);
 
-        if (is_wp_error($response)) return false;
+        if (is_wp_error($response)) {
+            $this->last_embedding_error = $response->get_error_message();
+            return false;
+        }
 
         $body = json_decode(wp_remote_retrieve_body($response), true);
-        return $body['data'][0]['embedding'] ?? false;
+        if (isset($body['error']['message'])) {
+            $this->last_embedding_error = $body['error']['message'];
+            return false;
+        }
+
+        $embedding = $body['data'][0]['embedding'] ?? null;
+        if ($embedding === null) {
+            $this->last_embedding_error = 'Respuesta invalida del servicio de embeddings.';
+            return false;
+        }
+
+        return $embedding;
+    }
+
+    public function get_last_embedding_error() {
+        return $this->last_embedding_error;
     }
 
     /**
@@ -320,6 +361,10 @@ class Chat_Bot_Indexer {
             'source_type' => $source_type,
             'source_id' => $source_id,
         ]);
+    }
+
+    public function delete_document_embeddings($source_id, $source_type = 'file') {
+        $this->delete_embeddings($source_type, $source_id);
     }
 
     private function clear_embeddings($exclude_source_types = array()) {

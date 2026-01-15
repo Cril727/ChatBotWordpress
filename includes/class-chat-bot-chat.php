@@ -234,13 +234,16 @@ class Chat_Bot_Chat {
         $api_key = get_option('chatbot_openai_api_key');
         if (!$api_key) return false;
 
+        $model = get_option('chatbot_openai_embedding_model', 'text-embedding-3-small');
+        $model = apply_filters('chatbot_openai_embedding_model', $model);
+
         $response = wp_remote_post('https://api.openai.com/v1/embeddings', [
             'headers' => [
                 'Authorization' => 'Bearer ' . $api_key,
                 'Content-Type' => 'application/json',
             ],
             'body' => json_encode([
-                'model' => 'text-embedding-ada-002',
+                'model' => $model,
                 'input' => $text,
             ]),
             'timeout' => 30,

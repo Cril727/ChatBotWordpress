@@ -56,6 +56,7 @@ class Chat_Bot_Admin {
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
 		add_action( 'admin_post_chatbot_upload_training_file', array( $this, 'handle_training_file_upload' ) );
+		add_action( 'admin_post_chatbot_delete_training_file', array( $this, 'handle_training_file_delete' ) );
 
 	}
 
@@ -363,12 +364,65 @@ class Chat_Bot_Admin {
 
 		$indexer = new Chat_Bot_Indexer();
 		$chunk_limit = $this->get_training_max_chunks();
-		$chunk_count = $indexer->index_document( $attachment_id, $text, 'file', $chunk_limit );
+		$result = $indexer->index_document( $attachment_id, $text, 'file', $chunk_limit );
+		$total = isset( $result['chunks_total'] ) ? (int) $result['chunks_total'] : 0;
+		$embedded = isset( $result['chunks_embedded'] ) ? (int) $result['chunks_embedded'] : 0;
+		$error = isset( $result['error'] ) ? $result['error'] : '';
 
-		update_post_meta( $attachment_id, 'chatbot_chunk_count', $chunk_count );
+		update_post_meta( $attachment_id, 'chatbot_chunk_count', $embedded );
 		update_post_meta( $attachment_id, 'chatbot_indexed_at', current_time( 'mysql' ) );
 
-		$this->set_training_notice( 'success', 'Archivo indexado correctamente. Chunks: ' . $chunk_count . '.' );
+		if ( $embedded <= 0 ) {
+			$message = 'No se pudieron generar embeddings.';
+			if ( ! empty( $error ) ) {
+				$message .= ' Error: ' . $error;
+			}
+			$this->set_training_notice( 'error', $message );
+		} elseif ( $embedded < $total ) {
+			$message = 'Archivo indexado parcialmente. Chunks: ' . $embedded . ' de ' . $total . '.';
+			if ( ! empty( $error ) ) {
+				$message .= ' Ultimo error: ' . $error;
+			}
+			$this->set_training_notice( 'warning', $message );
+		} else {
+			$this->set_training_notice( 'success', 'Archivo indexado correctamente. Chunks: ' . $embedded . '.' );
+		}
+		wp_safe_redirect( admin_url( 'admin.php?page=chat-bot-settings' ) );
+		exit;
+	}
+
+	public function handle_training_file_delete() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'No autorizado.' );
+		}
+
+		check_admin_referer( 'chatbot_delete_training_file' );
+
+		$attachment_id = isset( $_POST['attachment_id'] ) ? (int) $_POST['attachment_id'] : 0;
+		if ( $attachment_id <= 0 ) {
+			$this->set_training_notice( 'error', 'Archivo no valido.' );
+			wp_safe_redirect( admin_url( 'admin.php?page=chat-bot-settings' ) );
+			exit;
+		}
+
+		$source = get_post_meta( $attachment_id, 'chatbot_training_source', true );
+		if ( $source !== 'upload' ) {
+			$this->set_training_notice( 'error', 'El archivo no pertenece al entrenamiento.' );
+			wp_safe_redirect( admin_url( 'admin.php?page=chat-bot-settings' ) );
+			exit;
+		}
+
+		$indexer = new Chat_Bot_Indexer();
+		$indexer->delete_document_embeddings( $attachment_id, 'file' );
+
+		$deleted = wp_delete_attachment( $attachment_id, true );
+		if ( ! $deleted ) {
+			$this->set_training_notice( 'error', 'No se pudo eliminar el archivo.' );
+			wp_safe_redirect( admin_url( 'admin.php?page=chat-bot-settings' ) );
+			exit;
+		}
+
+		$this->set_training_notice( 'success', 'Archivo eliminado y embeddings removidos.' );
 		wp_safe_redirect( admin_url( 'admin.php?page=chat-bot-settings' ) );
 		exit;
 	}
@@ -582,7 +636,7 @@ class Chat_Bot_Admin {
 		}
 
 		echo '<h3>Archivos indexados recientemente</h3>';
-		echo '<table class="widefat striped"><thead><tr><th>Archivo</th><th>Tipo</th><th>Chunks</th><th>Fecha</th></tr></thead><tbody>';
+		echo '<table class="widefat striped"><thead><tr><th>Archivo</th><th>Tipo</th><th>Chunks</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody>';
 
 		foreach ( $docs as $doc ) {
 			$chunks = get_post_meta( $doc->ID, 'chatbot_chunk_count', true );
@@ -591,6 +645,14 @@ class Chat_Bot_Admin {
 			echo '<td>' . esc_html( $doc->post_mime_type ) . '</td>';
 			echo '<td>' . esc_html( $chunks ? $chunks : '0' ) . '</td>';
 			echo '<td>' . esc_html( get_the_date( 'Y-m-d H:i', $doc->ID ) ) . '</td>';
+			echo '<td>';
+			echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" onsubmit="return confirm(\'Eliminar este archivo y sus embeddings?\');">';
+			wp_nonce_field( 'chatbot_delete_training_file' );
+			echo '<input type="hidden" name="action" value="chatbot_delete_training_file">';
+			echo '<input type="hidden" name="attachment_id" value="' . esc_attr( $doc->ID ) . '">';
+			submit_button( 'Eliminar', 'delete', 'submit', false );
+			echo '</form>';
+			echo '</td>';
 			echo '</tr>';
 		}
 
