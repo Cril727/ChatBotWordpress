@@ -120,6 +120,33 @@ class Chat_Bot_Admin {
 			'dashicons-format-chat',
 			30
 		);
+
+		add_submenu_page(
+			'chat-bot-settings',
+			'Configuracion de IA',
+			'Configuracion de IA',
+			'manage_options',
+			'chat-bot-settings',
+			array( $this, 'settings_page' )
+		);
+
+		add_submenu_page(
+			'chat-bot-settings',
+			'Subida de archivos',
+			'Subida de archivos',
+			'manage_options',
+			'chat-bot-training',
+			array( $this, 'training_page' )
+		);
+
+		add_submenu_page(
+			'chat-bot-settings',
+			'Personalizacion',
+			'Personalizacion',
+			'manage_options',
+			'chat-bot-design',
+			array( $this, 'design_page' )
+		);
 	}
 
 	/**
@@ -274,76 +301,79 @@ class Chat_Bot_Admin {
 	public function settings_page() {
 		?>
 		<div class="wrap chatbot-settings">
-			<h1>Configuración del Chat Bot</h1>
+			<h1>Configuracion de IA</h1>
 			<?php $this->render_training_notice(); ?>
-			<h2 class="nav-tab-wrapper">
-				<a href="#chatbot-tab-ai" class="nav-tab nav-tab-active chatbot-nav-tab" data-tab="ai">Configuración de IA</a>
-				<a href="#chatbot-tab-training" class="nav-tab chatbot-nav-tab" data-tab="training">Subida de archivos</a>
-				<a href="#chatbot-tab-design" class="nav-tab chatbot-nav-tab" data-tab="design">Personalización</a>
-			</h2>
+			<form method="post" action="options.php">
+				<?php
+				settings_fields( 'chatbot_settings' );
+				do_settings_sections( 'chatbot_settings_ai' );
+				submit_button();
+				?>
+			</form>
+		</div>
+		<?php
+	}
 
-			<div id="chatbot-tab-ai" class="chatbot-tab-panel is-active">
-				<form method="post" action="options.php">
-					<?php
-					settings_fields( 'chatbot_settings' );
-					do_settings_sections( 'chatbot_settings_ai' );
-					submit_button();
-					?>
-				</form>
-			</div>
+	public function training_page() {
+		?>
+		<div class="wrap chatbot-settings">
+			<h1>Subida de archivos</h1>
+			<?php $this->render_training_notice(); ?>
+			<p>Sube archivos para indexar su contenido y usarlos en las respuestas del chatbot.</p>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data">
+				<?php wp_nonce_field( 'chatbot_upload_training_file' ); ?>
+				<input type="hidden" name="action" value="chatbot_upload_training_file">
+				<input type="file" name="chatbot_training_file" accept=".txt,.md,.csv,.pdf,.docx" required>
+				<p class="description">Formatos permitidos: txt, md, csv, pdf, docx. Tamaño máximo: <?php echo esc_html( size_format( $this->get_training_max_file_size() ) ); ?>.</p>
+				<?php submit_button( 'Subir e indexar' ); ?>
+			</form>
 
-			<div id="chatbot-tab-training" class="chatbot-tab-panel">
-				<h2>Entrenamiento con archivos</h2>
-				<p>Sube archivos para indexar su contenido y usarlos en las respuestas del chatbot.</p>
-				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data">
-					<?php wp_nonce_field( 'chatbot_upload_training_file' ); ?>
-					<input type="hidden" name="action" value="chatbot_upload_training_file">
-					<input type="file" name="chatbot_training_file" accept=".txt,.md,.csv,.pdf,.docx" required>
-					<p class="description">Formatos permitidos: txt, md, csv, pdf, docx. Tamaño máximo: <?php echo esc_html( size_format( $this->get_training_max_file_size() ) ); ?>.</p>
-					<?php submit_button( 'Subir e indexar' ); ?>
-				</form>
+			<?php $this->render_training_documents_list(); ?>
+		</div>
+		<?php
+	}
 
-				<?php $this->render_training_documents_list(); ?>
-			</div>
-
-			<div id="chatbot-tab-design" class="chatbot-tab-panel">
-				<div class="chatbot-design-grid">
-					<div class="chatbot-design-form">
-						<form method="post" action="options.php">
-							<?php
-							settings_fields( 'chatbot_settings' );
-							do_settings_sections( 'chatbot_settings_design' );
-							?>
-							<div class="chatbot-color-presets">
-								<p><strong>Paletas rápidas</strong></p>
-								<div class="chatbot-palette-list">
-									<button type="button" class="chatbot-color-preset" data-primary="#10b981" data-accent="#3b82f6">Verde/Azul</button>
-									<button type="button" class="chatbot-color-preset" data-primary="#ef4444" data-accent="#f97316">Rojo/Naranja</button>
-									<button type="button" class="chatbot-color-preset" data-primary="#6366f1" data-accent="#0ea5e9">Indigo/Celeste</button>
-									<button type="button" class="chatbot-color-preset" data-primary="#0f172a" data-accent="#64748b">Grafito</button>
-									<button type="button" class="chatbot-color-preset" data-primary="#14b8a6" data-accent="#22c55e">Teal/Verde</button>
-								</div>
+	public function design_page() {
+		?>
+		<div class="wrap chatbot-settings">
+			<h1>Personalizacion</h1>
+			<?php $this->render_training_notice(); ?>
+			<div class="chatbot-design-grid">
+				<div class="chatbot-design-form">
+					<form method="post" action="options.php">
+						<?php
+						settings_fields( 'chatbot_settings' );
+						do_settings_sections( 'chatbot_settings_design' );
+						?>
+						<div class="chatbot-color-presets">
+							<p><strong>Paletas rapidas</strong></p>
+							<div class="chatbot-palette-list">
+								<button type="button" class="chatbot-color-preset" data-primary="#10b981" data-accent="#3b82f6">Verde/Azul</button>
+								<button type="button" class="chatbot-color-preset" data-primary="#ef4444" data-accent="#f97316">Rojo/Naranja</button>
+								<button type="button" class="chatbot-color-preset" data-primary="#6366f1" data-accent="#0ea5e9">Indigo/Celeste</button>
+								<button type="button" class="chatbot-color-preset" data-primary="#0f172a" data-accent="#64748b">Grafito</button>
+								<button type="button" class="chatbot-color-preset" data-primary="#14b8a6" data-accent="#22c55e">Teal/Verde</button>
 							</div>
-							<?php submit_button(); ?>
-						</form>
-					</div>
-					<div class="chatbot-design-preview">
-						<div class="chatbot-preview-card">
-							<div class="chatbot-preview-widget" id="chatbot-design-preview">
-								<div class="chatbot-preview-header">
-									<span class="chatbot-preview-title">Chatbot</span>
-								</div>
-								<div class="chatbot-preview-messages">
-									<div class="chatbot-preview-message chatbot-preview-message-bot">Hola, ¿en qué puedo ayudarte?</div>
-									<div class="chatbot-preview-message chatbot-preview-message-user">Quiero información sobre productos.</div>
-								</div>
-								<div class="chatbot-preview-input">Escribe tu mensaje...</div>
-							</div>
-							<div class="chatbot-preview-launcher">
-								<span class="chatbot-preview-button">💬</span>
-							</div>
-							<p class="description">Vista previa del estilo del bot. Los cambios se reflejan al instante.</p>
 						</div>
+						<?php submit_button(); ?>
+					</form>
+				</div>
+				<div class="chatbot-design-preview">
+					<div class="chatbot-preview-card">
+						<div class="chatbot-preview-widget" id="chatbot-design-preview">
+							<div class="chatbot-preview-header">
+								<span class="chatbot-preview-title">Chatbot</span>
+							</div>
+							<div class="chatbot-preview-messages">
+								<div class="chatbot-preview-message chatbot-preview-message-bot">Hola, ¿en que puedo ayudarte?</div>
+								<div class="chatbot-preview-message chatbot-preview-message-user">Quiero informacion sobre productos.</div>
+							</div>
+							<div class="chatbot-preview-input">Escribe tu mensaje...</div>
+						</div>
+						<div class="chatbot-preview-launcher">
+							<span class="chatbot-preview-button">💬</span>
+						</div>
+						<p class="description">Vista previa del estilo del bot. Los cambios se reflejan al instante.</p>
 					</div>
 				</div>
 			</div>

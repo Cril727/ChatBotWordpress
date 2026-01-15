@@ -41,100 +41,80 @@
 		}
 
 		const $preview = $('#chatbot-design-preview');
-		const $previewTitle = $preview.find('.chatbot-preview-title');
-		const $previewButton = $preview.find('.chatbot-preview-button');
-		const $previewInput = $preview.find('.chatbot-preview-input');
+		if ($preview.length) {
+			const $previewTitle = $preview.find('.chatbot-preview-title');
+			const $previewButton = $preview.find('.chatbot-preview-button');
+			const $previewInput = $preview.find('.chatbot-preview-input');
 
-		function getFieldValue(selector, fallback) {
-			const value = $(selector).val();
-			return value !== undefined && value !== '' ? value : fallback;
-		}
-
-		function applyPreview() {
-			const botName = getFieldValue('input[name="chatbot_bot_name"]', 'Chatbot');
-			const buttonLabel = getFieldValue('input[name="chatbot_button_label"]', '💬');
-			const theme = getFieldValue('select[name="chatbot_theme"]', 'light');
-			const position = getFieldValue('select[name="chatbot_position"]', 'bottom-right');
-			const primary = getFieldValue('input[name="chatbot_primary_color"]', '#10b981');
-			const accent = getFieldValue('input[name="chatbot_accent_color"]', '#3b82f6');
-			const width = getFieldValue('input[name="chatbot_widget_width"]', '');
-			const height = getFieldValue('input[name="chatbot_widget_height"]', '');
-			const font = getFieldValue('input[name="chatbot_font_family"]', '');
-
-			$previewTitle.text(botName);
-			$preview.attr('data-position', position);
-			$preview.attr('data-theme', theme);
-
-			$preview[0].style.setProperty('--chatbot-primary', primary);
-			$preview[0].style.setProperty('--chatbot-accent', accent);
-
-			if (width) {
-				$preview[0].style.setProperty('--chatbot-width', width + 'px');
-			} else {
-				$preview[0].style.removeProperty('--chatbot-width');
+			function getFieldValue(selector, fallback) {
+				const value = $(selector).val();
+				return value !== undefined && value !== '' ? value : fallback;
 			}
 
-			if (height) {
-				$preview[0].style.setProperty('--chatbot-height', height + 'px');
-			} else {
-				$preview[0].style.removeProperty('--chatbot-height');
+			function applyPreview() {
+				const botName = getFieldValue('input[name="chatbot_bot_name"]', 'Chatbot');
+				const buttonLabel = getFieldValue('input[name="chatbot_button_label"]', '💬');
+				const theme = getFieldValue('select[name="chatbot_theme"]', 'light');
+				const position = getFieldValue('select[name="chatbot_position"]', 'bottom-right');
+				const primary = getFieldValue('input[name="chatbot_primary_color"]', '#10b981');
+				const accent = getFieldValue('input[name="chatbot_accent_color"]', '#3b82f6');
+				const width = getFieldValue('input[name="chatbot_widget_width"]', '');
+				const height = getFieldValue('input[name="chatbot_widget_height"]', '');
+				const font = getFieldValue('input[name="chatbot_font_family"]', '');
+
+				$previewTitle.text(botName);
+				$preview.attr('data-position', position);
+				$preview.attr('data-theme', theme);
+
+				$preview[0].style.setProperty('--chatbot-primary', primary);
+				$preview[0].style.setProperty('--chatbot-accent', accent);
+
+				if (width) {
+					$preview[0].style.setProperty('--chatbot-width', width + 'px');
+				} else {
+					$preview[0].style.removeProperty('--chatbot-width');
+				}
+
+				if (height) {
+					$preview[0].style.setProperty('--chatbot-height', height + 'px');
+				} else {
+					$preview[0].style.removeProperty('--chatbot-height');
+				}
+
+				if (font) {
+					$preview[0].style.setProperty('--chatbot-font', font);
+				} else {
+					$preview[0].style.removeProperty('--chatbot-font');
+				}
+
+				if ($previewButton.length) {
+					$previewButton.text(buttonLabel);
+				}
+
+				if ($previewInput.length) {
+					$previewInput.text('Escribe tu mensaje...');
+				}
 			}
 
-			if (font) {
-				$preview[0].style.setProperty('--chatbot-font', font);
-			} else {
-				$preview[0].style.removeProperty('--chatbot-font');
-			}
+			$('.chatbot-settings').on('input change', 'input, select', function() {
+				applyPreview();
+			});
 
-			if ($previewButton.length) {
-				$previewButton.text(buttonLabel);
-			}
+			$('.chatbot-color-preset').on('click', function() {
+				const primary = $(this).data('primary');
+				const accent = $(this).data('accent');
+				const $primaryField = $('input[name="chatbot_primary_color"]');
+				const $accentField = $('input[name="chatbot_accent_color"]');
 
-			if ($previewInput.length) {
-				$previewInput.text('Escribe tu mensaje...');
-			}
-		}
+				if ($primaryField.length) {
+					$primaryField.wpColorPicker('color', primary);
+				}
+				if ($accentField.length) {
+					$accentField.wpColorPicker('color', accent);
+				}
+			});
 
-		$('.chatbot-settings').on('input change', 'input, select', function() {
 			applyPreview();
-		});
-
-		$('.chatbot-color-preset').on('click', function() {
-			const primary = $(this).data('primary');
-			const accent = $(this).data('accent');
-			const $primaryField = $('input[name="chatbot_primary_color"]');
-			const $accentField = $('input[name="chatbot_accent_color"]');
-
-			if ($primaryField.length) {
-				$primaryField.wpColorPicker('color', primary);
-			}
-			if ($accentField.length) {
-				$accentField.wpColorPicker('color', accent);
-			}
-		});
-
-		applyPreview();
-
-		function setActiveTab(tab) {
-			$('.chatbot-nav-tab').removeClass('nav-tab-active');
-			$('.chatbot-tab-panel').removeClass('is-active');
-
-			$('.chatbot-nav-tab[data-tab="' + tab + '"]').addClass('nav-tab-active');
-			$('#chatbot-tab-' + tab).addClass('is-active');
-		}
-
-		$('.chatbot-nav-tab').on('click', function(e) {
-			e.preventDefault();
-			const tab = $(this).data('tab');
-			setActiveTab(tab);
-			if (tab) {
-				window.location.hash = 'chatbot-tab-' + tab;
-			}
-		});
-
-		const hash = window.location.hash.replace('#', '');
-		if (hash.indexOf('chatbot-tab-') === 0) {
-			setActiveTab(hash.replace('chatbot-tab-', ''));
 		}
 	});
 })( jQuery );
