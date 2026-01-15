@@ -387,6 +387,9 @@ class Chat_Bot_Admin {
 	private function get_training_max_file_size() {
 		$limit = 15 * MB_IN_BYTES;
 		$wp_limit = wp_max_upload_size();
+		if ( $wp_limit <= 0 ) {
+			$wp_limit = $limit;
+		}
 		$size = (int) min( $limit, $wp_limit );
 		return (int) apply_filters( 'chatbot_training_max_file_size', $size );
 	}
@@ -457,18 +460,22 @@ class Chat_Bot_Admin {
 	}
 
 	private function extract_text_from_text_file( $file_path, $extension, $max_bytes ) {
-		$handle = fopen( $file_path, 'rb' );
-		if ( ! $handle ) {
-			return '';
-		}
-
-		$content = fread( $handle, $max_bytes );
-		fclose( $handle );
-
 		if ( $extension === 'csv' ) {
 			return $this->extract_text_from_csv( $file_path );
 		}
 
+		$size = filesize( $file_path );
+		$length = $max_bytes;
+		if ( $size !== false && $size > 0 ) {
+			$length = min( $size, $max_bytes );
+		}
+
+		$content = file_get_contents( $file_path, false, null, 0, $length );
+		if ( $content === false ) {
+			return '';
+		}
+
+		$content = preg_replace( '/\x00+/', '', $content );
 		return (string) $content;
 	}
 
@@ -479,13 +486,13 @@ class Chat_Bot_Admin {
 		}
 
 		$rows = array();
-		$max_rows = (int) apply_filters( 'chatbot_training_csv_max_rows', 2000 );
+		$max_rows = (int) apply_filters( 'chatbot_training_csv_max_rows', 0 );
 		$count = 0;
 
 		while ( ( $data = fgetcsv( $handle ) ) !== false ) {
 			$rows[] = implode( ' | ', array_map( 'trim', $data ) );
 			$count++;
-			if ( $count >= $max_rows ) {
+			if ( $max_rows > 0 && $count >= $max_rows ) {
 				break;
 			}
 		}
@@ -524,6 +531,21 @@ class Chat_Bot_Admin {
 			return trim( $pdf->getText() );
 		}
 
+		if ( ! class_exists( 'Chat_Bot_Pdf_Parser' ) ) {
+			$parser_path = plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-chat-bot-pdf-parser.php';
+			if ( file_exists( $parser_path ) ) {
+				require_once $parser_path;
+			}
+		}
+
+		if ( class_exists( 'Chat_Bot_Pdf_Parser' ) ) {
+			$parser = new Chat_Bot_Pdf_Parser();
+			$text = $parser->extract_text( $file_path );
+			if ( ! empty( $text ) ) {
+				return $text;
+			}
+		}
+
 		if ( function_exists( 'shell_exec' ) ) {
 			$cmd = 'pdftotext ' . escapeshellarg( $file_path ) . ' -';
 			$output = shell_exec( $cmd );
@@ -532,7 +554,7 @@ class Chat_Bot_Admin {
 			}
 		}
 
-		$this->last_extraction_error = 'Para PDF se requiere pdftotext o una libreria de parser PDF.';
+		$this->last_extraction_error = 'No fue posible extraer texto del PDF. Intenta instalar pdftotext o un parser PDF.';
 		return '';
 	}
 
