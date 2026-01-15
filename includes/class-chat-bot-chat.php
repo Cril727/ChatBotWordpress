@@ -67,23 +67,203 @@ class Chat_Bot_Chat {
         return strpos($url, $site_url) === 0;
     }
 
+    private function normalize_session_id($session_id) {
+        $session_id = preg_replace('/[^a-zA-Z0-9_-]/', '', (string) $session_id);
+        if (strlen($session_id) > 64) {
+            $session_id = substr($session_id, 0, 64);
+        }
+        return $session_id;
+    }
+
+    private function default_conversation_state() {
+        return array(
+            'topic' => '',
+            'last_question' => '',
+        );
+    }
+
+    private function get_conversation_state($session_id) {
+        $session_id = $this->normalize_session_id($session_id);
+        if ($session_id === '') {
+            return $this->default_conversation_state();
+        }
+
+        $state = get_transient('chatbot_session_' . $session_id);
+        if (!is_array($state)) {
+            $state = $this->default_conversation_state();
+        }
+
+        return $state;
+    }
+
+    private function update_conversation_state($session_id, array $state) {
+        $session_id = $this->normalize_session_id($session_id);
+        if ($session_id === '') {
+            return;
+        }
+
+        set_transient('chatbot_session_' . $session_id, $state, 30 * MINUTE_IN_SECONDS);
+    }
+
+    private function detect_topic_switch($message) {
+        $message = strtolower($message);
+        $phrases = array(
+            'cambiar de tema',
+            'cambiemos de tema',
+            'otro tema',
+            'nuevo tema',
+            'pasemos a',
+            'hablemos de',
+        );
+
+        foreach ($phrases as $phrase) {
+            if (strpos($message, $phrase) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function is_ambiguous_followup($message, $topic = '') {
+        $lower = strtolower(trim($message));
+        if ($lower === '') {
+            return false;
+        }
+
+        if (preg_match('/\b20\d{2}\b/', $lower)) {
+            return true;
+        }
+
+        if (strpos($lower, 'a que se refiere') !== false
+            || strpos($lower, 'que se refiere') !== false
+            || strpos($lower, 'que significa') !== false
+            || strpos($lower, 'que paso') !== false
+            || strpos($lower, 'que pasa') !== false
+            || strpos($lower, 'y eso') !== false
+            || strpos($lower, 'y esto') !== false
+            || strpos($lower, 'eso') === 0
+            || strpos($lower, 'esto') === 0
+        ) {
+            return true;
+        }
+
+        $clean = preg_replace('/[^a-z0-9\s]/', '', $lower);
+        $words = preg_split('/\s+/', $clean, -1, PREG_SPLIT_NO_EMPTY);
+        $word_count = count($words);
+
+        $stopwords = array(
+            'que', 'como', 'cual', 'cuales', 'quien', 'quienes', 'cuando', 'donde',
+            'eso', 'esto', 'esa', 'ese', 'a', 'en', 'el', 'la', 'los', 'las', 'y',
+            'pero', 'si', 'no', 'de', 'del', 'sobre', 'por', 'para', 'un', 'una',
+            'me', 'te', 'se', 'lo', 'la', 'es', 'son', 'fue', 'era', 'y', 'o'
+        );
+
+        $meaningful = array();
+        foreach ($words as $word) {
+            if (!in_array($word, $stopwords, true)) {
+                $meaningful[] = $word;
+            }
+        }
+
+        if ($word_count <= 3 && count($meaningful) <= 1) {
+            if (!empty($topic) && count($meaningful) === 1) {
+                $token = $meaningful[0];
+                if (stripos($topic, $token) === false) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    private function extract_title_from_chunk($chunk_text) {
+        if (strpos($chunk_text, ': ') !== false) {
+            list($title, $body) = explode(': ', $chunk_text, 2);
+            $title = trim($title);
+            if ($title !== '') {
+                return $title;
+            }
+        }
+
+        return '';
+    }
+
+    private function infer_topic_from_chunks($relevant_chunks) {
+        foreach ($relevant_chunks as $chunk) {
+            $source_id = isset($chunk['source_id']) ? (int) $chunk['source_id'] : 0;
+            if ($source_id) {
+                $title = get_the_title($source_id);
+                if (!empty($title)) {
+                    return $title;
+                }
+            }
+
+            if (!empty($chunk['chunk'])) {
+                $title = $this->extract_title_from_chunk($chunk['chunk']);
+                if (!empty($title)) {
+                    return $title;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    private function filter_relevant_chunks($relevant_chunks, $min_similarity = 0.15) {
+        $filtered = array();
+        foreach ($relevant_chunks as $chunk) {
+            if (!isset($chunk['similarity']) || $chunk['similarity'] >= $min_similarity) {
+                $filtered[] = $chunk;
+            }
+        }
+
+        return $filtered;
+    }
+
+    private function build_no_context_response($message, $conversation_state) {
+        $topic = '';
+        if (is_array($conversation_state) && !empty($conversation_state['topic'])) {
+            $topic = $conversation_state['topic'];
+        }
+
+        if (!empty($topic)) {
+            return 'No tengo informacion relacionada con eso en los documentos. Si quieres, seguimos con "' . $topic . '" o cambiamos de tema.';
+        }
+
+        return 'No tengo informacion relacionada con eso en los documentos indexados. Si puedes dar mas detalle o un tema, te ayudo.';
+    }
+
     /**
      * Process a chat message and return response
      */
-    public function process_message($message, $current_post_id = null, $current_url = '') {
+    public function process_message($message, $current_post_id = null, $current_url = '', $session_id = '') {
         $openai_key = get_option('chatbot_openai_api_key');
         $google_key = get_option('chatbot_google_api_key');
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Processing message: ' . $message . ', Post ID: ' . $current_post_id);
+
+        $state = $this->get_conversation_state($session_id);
+        $topic = !empty($state['topic']) ? $state['topic'] : '';
+        if ($this->detect_topic_switch($message)) {
+            $topic = '';
+            $state['topic'] = '';
+        }
+
+        $force_topic = (!empty($topic) && $this->is_ambiguous_followup($message, $topic));
+        $query_text = $force_topic ? trim($message . ' ' . $topic) : $message;
         $relevant_chunks = [];
 
         if ($openai_key || $google_key) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: API key available, generating embedding');
             // Generate embedding for the query
-            $query_embedding = $this->generate_embedding($message);
+            $query_embedding = $this->generate_embedding($query_text);
             if ($query_embedding) {
                 if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Embedding generated successfully');
                 // Search for similar content
                 $relevant_chunks = $this->search_similar($query_embedding, $current_post_id);
+                $relevant_chunks = $this->filter_relevant_chunks($relevant_chunks);
                 if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Found ' . count($relevant_chunks) . ' relevant chunks');
             } else {
                 if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Failed to generate embedding');
@@ -109,17 +289,31 @@ class Chat_Bot_Chat {
             }
         }
 
-        // If no relevant chunks found or no API key, use site-wide content as fallback
-        if (empty($relevant_chunks)) {
+        $no_context = empty($relevant_chunks);
+
+        // If no embeddings are available, use site-wide content as a basic fallback
+        if ($no_context && empty($openai_key) && empty($google_key)) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Using site content fallback');
             $site_content = $this->get_site_content();
             if ($site_content) {
-                $relevant_chunks = [['chunk' => $site_content, 'similarity' => 1.0]];
+                $relevant_chunks = [['chunk' => $site_content, 'similarity' => 0.0]];
+                $no_context = false;
             }
         }
 
         // Generate response using AI or basic fallback
-        return $this->generate_response($message, $relevant_chunks, $current_url, $current_post_id);
+        $response = $this->generate_response($message, $relevant_chunks, $current_url, $current_post_id, $state, $no_context);
+
+        $state['last_question'] = $message;
+        if (!$no_context && !$force_topic) {
+            $new_topic = $this->infer_topic_from_chunks($relevant_chunks);
+            if (!empty($new_topic)) {
+                $state['topic'] = $new_topic;
+            }
+        }
+        $this->update_conversation_state($session_id, $state);
+
+        return $response;
     }
 
     /**
@@ -346,7 +540,11 @@ class Chat_Bot_Chat {
     /**
      * Generate response using OpenAI Chat Completion
      */
-    private function generate_response($message, $relevant_chunks, $current_url = '', $current_post_id = 0) {
+    private function generate_response($message, $relevant_chunks, $current_url = '', $current_post_id = 0, $conversation_state = array(), $no_context = false) {
+        if ($no_context) {
+            return $this->build_no_context_response($message, $conversation_state);
+        }
+
         // Build context
         $context = '';
         foreach ($relevant_chunks as $chunk) {
@@ -354,31 +552,48 @@ class Chat_Bot_Chat {
         }
 
         $is_ecommerce = $this->is_ecommerce_site();
-        $site_type = $is_ecommerce ? 'comercio electrónico' : 'sitio web general';
+        $site_type = $is_ecommerce ? 'comercio electronico' : 'sitio web general';
         $current_page_info = $this->get_page_context($current_post_id, $current_url);
 
+        $active_topic = '';
+        $last_question = '';
+        if (is_array($conversation_state)) {
+            $active_topic = !empty($conversation_state['topic']) ? $conversation_state['topic'] : '';
+            $last_question = !empty($conversation_state['last_question']) ? $conversation_state['last_question'] : '';
+        }
+
+        $topic_line = $active_topic !== '' ? $active_topic : 'sin tema';
+        $last_line = $last_question !== '' ? $last_question : 'sin pregunta previa';
+
         $prompt = "
-           SOBRE PRODUCTOS:
+         CONTEXTO DE CONVERSACION:
+         - Tema activo: {$topic_line}
+         - Ultima pregunta: {$last_line}
+         - Mantener el tema activo hasta que el usuario pida cambiarlo.
+         - Si la pregunta es ambigua, pedir una aclaracion breve.
+         - Si el contexto no contiene la respuesta, decirlo claramente y ofrecer seguir con el tema actual o cambiarlo.
+
+         SOBRE PRODUCTOS:
          - Este sitio es un {$site_type}.
-         - Describe productos SOLO si el sitio es de comercio electrónico.
-         - Incluye únicamente características, beneficios y precios cuando estén disponibles en el contexto.
-         - No inventes información de productos.
-         - Cuando sea útil, incluye enlaces directos a páginas o productos del mismo sitio para guiar al usuario, nunca de otros comercios.
-         - Para consultas específicas sobre productos, proporciona el enlace directo al producto si está disponible en el contexto.
+         - Describe productos SOLO si el sitio es de comercio electronico.
+         - Incluye unicamente caracteristicas, beneficios y precios cuando esten disponibles en el contexto.
+         - No inventes informacion de productos.
+         - Cuando sea util, incluye enlaces directos a paginas o productos del mismo sitio para guiar al usuario, nunca de otros comercios.
+         - Para consultas especificas sobre productos, proporciona el enlace directo al producto si esta disponible en el contexto.
 
          OBJETIVO:
-         - Ayudar al usuario a encontrar información rápidamente.
-         - Facilitar la navegación del sitio.
-         - Incentivar la exploración del contenido y, si aplica, la compra de productos.
+         - Ayudar al usuario a encontrar informacion rapidamente.
+         - Facilitar la navegacion del sitio.
+         - Incentivar la exploracion del contenido y, si aplica, la compra de productos.
          {$current_page_info}
 
-         Contexto del sitio web:\n {$context} \n\nPregunta del usuario: {$message} \n\nResponde basándote en el contexto proporcionado.";
+         Contexto del sitio web:\n {$context} \n\nPregunta del usuario: {$message} \n\nResponde basandote en el contexto proporcionado.";
 
         // Try Google first if key is set
         $google_key = get_option('chatbot_google_api_key');
         if (!empty($google_key)) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Trying Google AI first');
-            $result = $this->generate_google_response($prompt, $message, $context, $current_url, $current_post_id);
+            $result = $this->generate_google_response($prompt, $message, $context, $current_url, $current_post_id, $conversation_state);
             if ($result !== false) { // Assuming false means failed
                 return $result;
             }
@@ -388,7 +603,7 @@ class Chat_Bot_Chat {
         $openai_key = get_option('chatbot_openai_api_key');
         if (!empty($openai_key)) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Trying OpenAI as fallback');
-            $result = $this->generate_openai_response($prompt, $message, $context, $current_url, $current_post_id);
+            $result = $this->generate_openai_response($prompt, $message, $context, $current_url, $current_post_id, $conversation_state);
             if ($result !== false) {
                 return $result;
             }
@@ -396,17 +611,17 @@ class Chat_Bot_Chat {
 
         // Fallback to basic
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Using basic response');
-        return $this->generate_basic_response($message, $context, $current_url, $current_post_id);
+        return $this->generate_basic_response($message, $context, $current_url, $current_post_id, $conversation_state, false);
     }
 
-    private function generate_openai_response($prompt, $message, $context, $current_url = '', $current_post_id = 0) {
+    private function generate_openai_response($prompt, $message, $context, $current_url = '', $current_post_id = 0, $conversation_state = array()) {
         $api_key = get_option('chatbot_openai_api_key');
         $model = get_option('chatbot_openai_model', 'gpt-3.5-turbo');
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: OpenAI API key present: ' . (!empty($api_key) ? 'Yes' : 'No') . ', Model: ' . $model);
 
         if (!$api_key) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: No OpenAI API key, using basic response');
-            return $this->generate_basic_response($message, $context, $current_url, $current_post_id);
+            return $this->generate_basic_response($message, $context, $current_url, $current_post_id, $conversation_state, false);
         }
 
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Sending prompt to OpenAI: ' . substr($prompt, 0, 200) . '...');
@@ -452,14 +667,14 @@ class Chat_Bot_Chat {
         return $content;
     }
 
-    private function generate_google_response($prompt, $message, $context, $current_url = '', $current_post_id = 0) {
+    private function generate_google_response($prompt, $message, $context, $current_url = '', $current_post_id = 0, $conversation_state = array()) {
         $api_key = get_option('chatbot_google_api_key');
         $model = get_option('chatbot_google_model', 'gemini-pro');
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Google API key present: ' . (!empty($api_key) ? 'Yes' : 'No') . ', Model: ' . $model);
 
         if (!$api_key) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: No Google API key, using basic response');
-            return $this->generate_basic_response($message, $context, $current_url, $current_post_id);
+            return $this->generate_basic_response($message, $context, $current_url, $current_post_id, $conversation_state, false);
         }
 
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Sending prompt to Google AI: ' . substr($prompt, 0, 200) . '...');
@@ -510,7 +725,16 @@ class Chat_Bot_Chat {
     /**
      * Generate a basic response when API key is not available
      */
-    private function generate_basic_response($message, $context, $current_url = '', $current_post_id = 0) {
+    private function generate_basic_response($message, $context, $current_url = '', $current_post_id = 0, $conversation_state = array(), $no_context = false) {
+        if ($no_context) {
+            return $this->build_no_context_response($message, $conversation_state);
+        }
+
+        $topic = '';
+        if (is_array($conversation_state) && !empty($conversation_state['topic'])) {
+            $topic = $conversation_state['topic'];
+        }
+
         // Simple keyword-based response generation
         $message_lower = strtolower($message);
         $context_lower = strtolower($context);
@@ -524,7 +748,7 @@ class Chat_Bot_Chat {
 
         // Basic responses for common questions
         if (strpos($message_lower, 'hola') !== false || strpos($message_lower, 'hello') !== false) {
-            return '¡Hola! Soy el asistente del sitio web. ¿En qué puedo ayudarte?';
+            return 'Hola, soy el asistente del sitio. ¿En que tema quieres ayuda?';
         }
 
         if (strpos($message_lower, 'adiós') !== false || strpos($message_lower, 'bye') !== false) {
@@ -570,7 +794,7 @@ class Chat_Bot_Chat {
         if ($this->is_ecommerce_site()) {
             $products = $this->search_products($message_lower);
             if (!empty($products)) {
-                $response = "¡Hola! Encontré algunos productos relacionados:\n\n";
+                $response = "Encontre algunos productos relacionados:\n\n";
                 foreach ($products as $product) {
                     $stock_text = '';
                     if ($product['stock_qty'] !== null) {
@@ -586,20 +810,24 @@ class Chat_Bot_Chat {
         }
 
         if (!empty($found_posts)) {
-            $response = "¡Hola! Encontré algo interesante en nuestro sitio:\n\n";
+            $response = "En el contenido del sitio encontre esto:\n\n";
             // Show top 1 most relevant post/page
             $content = $found_posts[0]['content'];
             // Extract title and content
             if (strpos($content, ': ') !== false) {
                 list($title, $body) = explode(': ', $content, 2);
-                $response .= "**" . $title . "**\n" . substr($body, 0, 150) . "...\n\n¿Te gustaría saber más?";
+                $response .= "**" . $title . "**\n" . substr($body, 0, 150) . "...\n\n¿Quieres que profundice o seguimos con este tema?";
             } else {
-                $response .= substr($content, 0, 200) . "...\n\n¿Te ayudo con algo más?";
+                $response .= substr($content, 0, 200) . "...\n\n¿Quieres que profundice o seguimos con este tema?";
             }
             return $response;
         }
 
-        return '¡Hola! No encontré información exacta sobre eso, pero nuestro sitio tiene contenido interesante. ¿Puedes contarme más sobre lo que buscas?';
+        if (!empty($topic)) {
+            return 'No tengo informacion relacionada con eso en los documentos. Si quieres, seguimos con "' . $topic . '" o cambiamos de tema.';
+        }
+
+        return 'No tengo informacion relacionada con eso en los documentos indexados. ¿Puedes darme un poco mas de detalle o el tema que buscas?';
     }
 
     private function get_page_context($current_post_id = 0, $current_url = '') {

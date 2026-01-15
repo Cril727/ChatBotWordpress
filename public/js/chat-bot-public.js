@@ -36,6 +36,24 @@
 		const $themeToggle = $('#neurorag-bot-theme-toggle');
 		const $title = $('#neurorag-bot-title');
 
+		const sessionKey = 'chatbot_session_id';
+		let sessionId = '';
+		try {
+			sessionId = window.localStorage ? localStorage.getItem(sessionKey) : '';
+		} catch (e) {
+			sessionId = '';
+		}
+		if (!sessionId) {
+			sessionId = 'cb_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+			try {
+				if (window.localStorage) {
+					localStorage.setItem(sessionKey, sessionId);
+				}
+			} catch (e) {
+				// Ignore storage errors.
+			}
+		}
+
 		let enviando = false;
 
 		function setTheme(isDark) {
@@ -186,6 +204,7 @@
 					message: rawMessage,
 					post_id: postId,
 					current_url: currentUrl,
+					session_id: sessionId,
 					nonce: chatbot_ajax.nonce
 				}
 			})
