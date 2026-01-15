@@ -525,6 +525,11 @@ class Chat_Bot_Admin {
 	}
 
 	private function extract_text_from_pdf( $file_path ) {
+		$vendor_autoload = plugin_dir_path( dirname( __FILE__ ) ) . 'includes/vendor/smalot/pdfparser/autoload.php';
+		if ( file_exists( $vendor_autoload ) ) {
+			require_once $vendor_autoload;
+		}
+
 		if ( class_exists( '\\Smalot\\PdfParser\\Parser' ) ) {
 			$parser = new \Smalot\PdfParser\Parser();
 			$pdf = $parser->parseFile( $file_path );
