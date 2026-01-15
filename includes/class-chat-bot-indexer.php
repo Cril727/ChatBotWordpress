@@ -21,8 +21,17 @@ class Chat_Bot_Indexer {
      * Index a post's content
      */
     public function index_post($post_id) {
+        if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) {
+            return;
+        }
+
         $post = get_post($post_id);
-        if (!$post || !in_array($post->post_status, ['publish', 'private'])) {
+        if (!$post || $post->post_status !== 'publish') {
+            return;
+        }
+
+        if ($post->post_type === 'product' && class_exists('WooCommerce')) {
+            $this->index_woocommerce_product($post_id);
             return;
         }
 
@@ -60,82 +69,181 @@ class Chat_Bot_Indexer {
     }
 
     /**
-     * Index database metadata and custom queries
+     * Index arbitrary document text (uploaded files)
      */
-    public function index_db_metadata() {
-        // Index categories
-        $categories = get_categories();
-        foreach ($categories as $cat) {
-            $text = 'Categoría: ' . $cat->name . ' ' . $cat->description;
-            $chunks = $this->chunk_text($text);
-            foreach ($chunks as $chunk) {
-                $embedding = $this->generate_embedding($chunk);
-                if ($embedding) {
-                    $this->store_embedding('category', $cat->term_id, $chunk, $embedding);
-                }
+    public function index_document($source_id, $text, $source_type = 'file', $max_chunks = 0) {
+        if (empty($text)) {
+            return 0;
+        }
+
+        $this->delete_embeddings($source_type, $source_id);
+
+        $chunks = $this->chunk_text($text);
+        if ($max_chunks > 0) {
+            $chunks = array_slice($chunks, 0, $max_chunks);
+        }
+
+        $count = 0;
+        foreach ($chunks as $chunk) {
+            $embedding = $this->generate_embedding($chunk);
+            if ($embedding) {
+                $this->store_embedding($source_type, $source_id, $chunk, $embedding);
+                $count++;
             }
         }
 
-        // Index WooCommerce products if active
-        if (class_exists('WooCommerce')) {
-            $this->index_woocommerce_products();
-        }
-
-        // Index custom DB queries
-        $this->index_custom_db_queries();
+        return $count;
     }
 
     /**
-     * Index WooCommerce products if active
+     * Index all public content for the site
      */
-    private function index_woocommerce_products() {
-        $products = wc_get_products(array(
-            'status' => 'publish',
-            'limit' => -1, // All products
-        ));
+    public function index_all_content() {
+        $this->clear_embeddings(array('file'));
+        $this->index_site_metadata();
+        $this->index_all_posts();
+        $this->index_taxonomies();
+    }
 
-        foreach ($products as $product) {
-            $this->delete_embeddings('product', $product->get_id());
+    /**
+     * Index all public posts/pages/products
+     */
+    private function index_all_posts() {
+        $post_types = get_post_types(['public' => true], 'names');
+        $exclude = ['attachment', 'nav_menu_item', 'revision'];
+        $post_types = array_diff($post_types, $exclude);
 
-            $content = $product->get_name() . ' ' . $product->get_description() . ' ' . $product->get_short_description();
-            $content .= ' Precio: ' . $product->get_price() . ' ' . get_woocommerce_currency_symbol();
+        foreach ($post_types as $post_type) {
+            $paged = 1;
+            do {
+                $query = new WP_Query([
+                    'post_type' => $post_type,
+                    'post_status' => 'publish',
+                    'posts_per_page' => 50,
+                    'paged' => $paged,
+                    'fields' => 'ids',
+                ]);
 
-            if ($product->is_type('variable')) {
-                $variations = $product->get_available_variations();
-                foreach ($variations as $variation) {
-                    $content .= ' Variación: ' . $variation['attributes'] . ' Precio: ' . $variation['display_price'];
+                if (empty($query->posts)) {
+                    break;
                 }
+
+                foreach ($query->posts as $post_id) {
+                    $this->index_post($post_id);
+                }
+
+                $paged++;
+            } while ($paged <= $query->max_num_pages);
+        }
+    }
+
+    /**
+     * Index all public taxonomies and terms
+     */
+    public function index_term($term_id, $tt_id = null, $taxonomy = '') {
+        $term = get_term($term_id, $taxonomy);
+        if (!$term || is_wp_error($term)) {
+            return;
+        }
+
+        $this->delete_embeddings('term', $term->term_id);
+
+        $text = 'Taxonomía: ' . $term->taxonomy . ' Término: ' . $term->name . ' ' . $term->description;
+        $chunks = $this->chunk_text($text);
+        foreach ($chunks as $chunk) {
+            $embedding = $this->generate_embedding($chunk);
+            if ($embedding) {
+                $this->store_embedding('term', $term->term_id, $chunk, $embedding);
+            }
+        }
+    }
+
+    private function index_taxonomies() {
+        $taxonomies = get_taxonomies(['public' => true], 'names');
+        foreach ($taxonomies as $taxonomy) {
+            $terms = get_terms([
+                'taxonomy' => $taxonomy,
+                'hide_empty' => false,
+            ]);
+
+            if (is_wp_error($terms)) {
+                continue;
             }
 
-            $chunks = $this->chunk_text($content);
-            foreach ($chunks as $chunk) {
-                $embedding = $this->generate_embedding($chunk);
-                if ($embedding) {
-                    $this->store_embedding('product', $product->get_id(), $chunk, $embedding);
-                }
+            foreach ($terms as $term) {
+                $this->index_term($term->term_id, null, $taxonomy);
             }
         }
     }
 
     /**
-     * Index results from custom database queries
+     * Index site-level metadata
      */
-    private function index_custom_db_queries() {
-        $db_query = new Chat_Bot_DB_Query();
-        $results = $db_query->execute_custom_queries();
-        $texts = $db_query->format_results_for_indexing($results);
+    private function index_site_metadata() {
+        $site_name = get_bloginfo('name');
+        $site_description = get_bloginfo('description');
+        $front_page_id = (int) get_option('page_on_front');
+        $front_page_title = $front_page_id ? get_the_title($front_page_id) : '';
 
-        foreach ($texts as $text) {
-            $chunks = $this->chunk_text($text);
-            foreach ($chunks as $chunk) {
-                $embedding = $this->generate_embedding($chunk);
-                if ($embedding) {
-                    $this->store_embedding('db_query', 0, $chunk, $embedding);
-                }
+        $text = "Sitio: {$site_name}. Descripción: {$site_description}.";
+        if (!empty($front_page_title)) {
+            $text .= " Página principal: {$front_page_title}.";
+        }
+
+        $chunks = $this->chunk_text($text);
+        foreach ($chunks as $chunk) {
+            $embedding = $this->generate_embedding($chunk);
+            if ($embedding) {
+                $this->store_embedding('site', 0, $chunk, $embedding);
+            }
+        }
+    }
+
+    /**
+     * Index WooCommerce product including stock and pricing
+     */
+    private function index_woocommerce_product($product_id) {
+        if (!class_exists('WooCommerce')) {
+            return;
+        }
+
+        $product = wc_get_product($product_id);
+        if (!$product) {
+            return;
+        }
+
+        $this->delete_embeddings('product', $product->get_id());
+
+        $content = $product->get_name() . ' ' . $product->get_description() . ' ' . $product->get_short_description();
+        $content .= ' Precio: ' . $product->get_price() . ' ' . get_woocommerce_currency_symbol();
+
+        $sku = $product->get_sku();
+        if (!empty($sku)) {
+            $content .= ' SKU: ' . $sku;
+        }
+
+        $stock_status = $product->get_stock_status();
+        $stock_qty = $product->get_stock_quantity();
+        if ($product->managing_stock() && $stock_qty !== null) {
+            $content .= ' Stock: ' . $stock_qty;
+        } else {
+            $content .= ' Stock: ' . $stock_status;
+        }
+
+        if ($product->is_type('variable')) {
+            $variations = $product->get_available_variations();
+            foreach ($variations as $variation) {
+                $content .= ' Variación: ' . wp_json_encode($variation['attributes']) . ' Precio: ' . $variation['display_price'];
             }
         }
 
-        $db_query->close();
+        $chunks = $this->chunk_text($content);
+        foreach ($chunks as $chunk) {
+            $embedding = $this->generate_embedding($chunk);
+            if ($embedding) {
+                $this->store_embedding('product', $product->get_id(), $chunk, $embedding);
+            }
+        }
     }
 
     /**
@@ -212,5 +320,20 @@ class Chat_Bot_Indexer {
             'source_type' => $source_type,
             'source_id' => $source_id,
         ]);
+    }
+
+    private function clear_embeddings($exclude_source_types = array()) {
+        global $wpdb;
+        if (empty($exclude_source_types)) {
+            $wpdb->query("DELETE FROM {$this->table_name}");
+            return;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($exclude_source_types), '%s'));
+        $query = $wpdb->prepare(
+            "DELETE FROM {$this->table_name} WHERE source_type NOT IN ($placeholders)",
+            $exclude_source_types
+        );
+        $wpdb->query($query);
     }
 }

@@ -39,6 +39,7 @@ class Chat_Bot_Admin {
 	 * @var      string    $version    The current version of this plugin.
 	 */
 	private $version;
+	private $last_extraction_error = '';
 
 	/**
 	 * Initialize the class and set its properties.
@@ -54,6 +55,7 @@ class Chat_Bot_Admin {
 
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
+		add_action( 'admin_post_chatbot_upload_training_file', array( $this, 'handle_training_file_upload' ) );
 
 	}
 
@@ -127,7 +129,6 @@ class Chat_Bot_Admin {
 		register_setting( 'chatbot_settings', 'chatbot_openai_model' );
 		register_setting( 'chatbot_settings', 'chatbot_google_api_key' );
 		register_setting( 'chatbot_settings', 'chatbot_google_model' );
-		register_setting( 'chatbot_settings', 'chatbot_custom_queries', array( $this, 'sanitize_custom_queries' ) );
 
 		add_settings_section(
 			'chatbot_main_section',
@@ -175,22 +176,6 @@ class Chat_Bot_Admin {
 			'chatbot_settings',
 			'chatbot_main_section'
 		);
-
-
-		add_settings_section(
-			'chatbot_queries_section',
-			'Consultas Personalizadas',
-			array( $this, 'queries_section_callback' ),
-			'chatbot_settings'
-		);
-
-		add_settings_field(
-			'custom_queries',
-			'Consultas SQL (una por línea)',
-			array( $this, 'custom_queries_field_callback' ),
-			'chatbot_settings',
-			'chatbot_queries_section'
-		);
 	}
 
 	/**
@@ -200,6 +185,7 @@ class Chat_Bot_Admin {
 		?>
 		<div class="wrap">
 			<h1>Configuración del Chat Bot</h1>
+			<?php $this->render_training_notice(); ?>
 			<form method="post" action="options.php">
 				<?php
 				settings_fields( 'chatbot_settings' );
@@ -207,6 +193,20 @@ class Chat_Bot_Admin {
 				submit_button();
 				?>
 			</form>
+
+			<hr>
+
+			<h2>Entrenamiento con archivos</h2>
+			<p>Sube archivos para indexar su contenido y usarlos en las respuestas del chatbot.</p>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data">
+				<?php wp_nonce_field( 'chatbot_upload_training_file' ); ?>
+				<input type="hidden" name="action" value="chatbot_upload_training_file">
+				<input type="file" name="chatbot_training_file" accept=".txt,.md,.csv,.pdf,.docx" required>
+				<p class="description">Formatos permitidos: txt, md, csv, pdf, docx. Tamaño máximo: <?php echo esc_html( size_format( $this->get_training_max_file_size() ) ); ?>.</p>
+				<?php submit_button( 'Subir e indexar' ); ?>
+			</form>
+
+			<?php $this->render_training_documents_list(); ?>
 		</div>
 		<?php
 	}
@@ -267,48 +267,304 @@ class Chat_Bot_Admin {
 		echo '<p class="description">Selecciona el modelo de OpenAI a usar.</p>';
 	}
 
-
-	/**
-	 * Queries section
-	 */
-	public function queries_section_callback() {
-		echo '<p>Define consultas SQL personalizadas que el chatbot puede ejecutar en la base de datos de WordPress. Solo SELECT permitidas por seguridad, y no se permiten * ni consultas peligrosas.</p>';
-	}
-
-	/**
-	 * Custom queries field
-	 */
-	public function custom_queries_field_callback() {
-		$value = get_option( 'chatbot_custom_queries' );
-		echo '<textarea name="chatbot_custom_queries" rows="10" cols="50">' . esc_textarea( $value ) . '</textarea>';
-		echo '<p class="description">Una consulta por línea. Ejemplo:<br>SELECT name, email FROM users WHERE active = 1</p>';
-	}
-
-	/**
-	 * Sanitize custom queries
-	 */
-	public function sanitize_custom_queries( $input ) {
-		if ( empty( $input ) ) {
-			return $input;
+	private function render_training_notice() {
+		$notice = get_transient( 'chatbot_training_notice' );
+		if ( empty( $notice ) || empty( $notice['message'] ) ) {
+			return;
 		}
 
-		$queries = array_filter( array_map( 'trim', explode( "\n", $input ) ) );
-		$sanitized = [];
+		$type = ! empty( $notice['type'] ) ? $notice['type'] : 'info';
+		$message = $notice['message'];
+		delete_transient( 'chatbot_training_notice' );
 
-		foreach ( $queries as $query ) {
-			$query = trim( $query );
-			if ( ! preg_match( '/^SELECT/i', $query ) ) {
-				add_settings_error( 'chatbot_custom_queries', 'invalid_query', 'Solo consultas SELECT son permitidas: ' . esc_html( $query ) );
-				continue;
-			}
-			if ( preg_match( '/\b(SELECT\s+\*|\bUNION\b|\bINFORMATION_SCHEMA\b|\bMYSQL\b|\bPERFORMANCE_SCHEMA\b|\bSYS\b)/i', $query ) ) {
-				add_settings_error( 'chatbot_custom_queries', 'dangerous_query', 'Consulta potencialmente peligrosa no permitida: ' . esc_html( $query ) );
-				continue;
-			}
-			$sanitized[] = $query;
+		echo '<div class="notice notice-' . esc_attr( $type ) . ' is-dismissible"><p>' . esc_html( $message ) . '</p></div>';
+	}
+
+	private function set_training_notice( $type, $message ) {
+		set_transient(
+			'chatbot_training_notice',
+			array(
+				'type' => $type,
+				'message' => $message,
+			),
+			60
+		);
+	}
+
+	public function handle_training_file_upload() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'No autorizado.' );
 		}
 
-		return implode( "\n", $sanitized );
+		check_admin_referer( 'chatbot_upload_training_file' );
+
+		if ( empty( get_option( 'chatbot_openai_api_key' ) ) ) {
+			$this->set_training_notice( 'error', 'Configura la clave de OpenAI antes de entrenar con archivos.' );
+			wp_safe_redirect( admin_url( 'admin.php?page=chat-bot-settings' ) );
+			exit;
+		}
+
+		if ( empty( $_FILES['chatbot_training_file']['name'] ) ) {
+			$this->set_training_notice( 'error', 'No se selecciono ningun archivo.' );
+			wp_safe_redirect( admin_url( 'admin.php?page=chat-bot-settings' ) );
+			exit;
+		}
+
+		$max_size = $this->get_training_max_file_size();
+		if ( ! empty( $_FILES['chatbot_training_file']['size'] ) && $_FILES['chatbot_training_file']['size'] > $max_size ) {
+			$this->set_training_notice( 'error', 'El archivo excede el tamano maximo permitido.' );
+			wp_safe_redirect( admin_url( 'admin.php?page=chat-bot-settings' ) );
+			exit;
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+
+		$upload = wp_handle_upload(
+			$_FILES['chatbot_training_file'],
+			array(
+				'test_form' => false,
+				'mimes' => $this->get_training_allowed_mimes(),
+			)
+		);
+
+		if ( isset( $upload['error'] ) ) {
+			$this->set_training_notice( 'error', 'Error al subir el archivo: ' . $upload['error'] );
+			wp_safe_redirect( admin_url( 'admin.php?page=chat-bot-settings' ) );
+			exit;
+		}
+
+		$attachment_id = $this->create_training_attachment( $upload );
+		if ( ! $attachment_id ) {
+			$this->set_training_notice( 'error', 'No se pudo registrar el archivo en la biblioteca.' );
+			wp_safe_redirect( admin_url( 'admin.php?page=chat-bot-settings' ) );
+			exit;
+		}
+
+		$hash = hash_file( 'sha256', $upload['file'] );
+		$existing = $this->find_existing_training_file( $hash );
+		if ( $existing && (int) $existing !== (int) $attachment_id ) {
+			wp_delete_attachment( $attachment_id, true );
+			$this->set_training_notice( 'error', 'Este archivo ya fue procesado anteriormente.' );
+			wp_safe_redirect( admin_url( 'admin.php?page=chat-bot-settings' ) );
+			exit;
+		}
+
+		$text = $this->extract_text_from_file( $upload['file'], $upload['type'] );
+		if ( empty( $text ) ) {
+			wp_delete_attachment( $attachment_id, true );
+			$message = ! empty( $this->last_extraction_error ) ? $this->last_extraction_error : 'No fue posible extraer texto del archivo.';
+			$this->set_training_notice( 'error', $message );
+			wp_safe_redirect( admin_url( 'admin.php?page=chat-bot-settings' ) );
+			exit;
+		}
+
+		update_post_meta( $attachment_id, 'chatbot_training_source', 'upload' );
+		update_post_meta( $attachment_id, 'chatbot_file_hash', $hash );
+
+		$indexer = new Chat_Bot_Indexer();
+		$chunk_limit = $this->get_training_max_chunks();
+		$chunk_count = $indexer->index_document( $attachment_id, $text, 'file', $chunk_limit );
+
+		update_post_meta( $attachment_id, 'chatbot_chunk_count', $chunk_count );
+		update_post_meta( $attachment_id, 'chatbot_indexed_at', current_time( 'mysql' ) );
+
+		$this->set_training_notice( 'success', 'Archivo indexado correctamente. Chunks: ' . $chunk_count . '.' );
+		wp_safe_redirect( admin_url( 'admin.php?page=chat-bot-settings' ) );
+		exit;
+	}
+
+	private function get_training_allowed_mimes() {
+		$mimes = array(
+			'txt' => 'text/plain',
+			'md' => 'text/markdown',
+			'csv' => 'text/csv',
+			'pdf' => 'application/pdf',
+			'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+		);
+		return apply_filters( 'chatbot_training_allowed_mimes', $mimes );
+	}
+
+	private function get_training_max_file_size() {
+		$limit = 15 * MB_IN_BYTES;
+		$wp_limit = wp_max_upload_size();
+		$size = (int) min( $limit, $wp_limit );
+		return (int) apply_filters( 'chatbot_training_max_file_size', $size );
+	}
+
+	private function get_training_max_chunks() {
+		$limit = apply_filters( 'chatbot_training_max_chunks', 200 );
+		return (int) max( 1, $limit );
+	}
+
+	private function create_training_attachment( $upload ) {
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+
+		$file_path = $upload['file'];
+		$attachment = array(
+			'post_mime_type' => $upload['type'],
+			'post_title' => sanitize_file_name( wp_basename( $file_path ) ),
+			'post_content' => '',
+			'post_status' => 'inherit',
+		);
+
+		$attachment_id = wp_insert_attachment( $attachment, $file_path );
+		if ( ! $attachment_id ) {
+			return 0;
+		}
+
+		wp_update_attachment_metadata( $attachment_id, wp_generate_attachment_metadata( $attachment_id, $file_path ) );
+		return $attachment_id;
+	}
+
+	private function find_existing_training_file( $hash ) {
+		$existing = get_posts( array(
+			'post_type' => 'attachment',
+			'posts_per_page' => 1,
+			'fields' => 'ids',
+			'meta_query' => array(
+				array(
+					'key' => 'chatbot_training_source',
+					'value' => 'upload',
+				),
+				array(
+					'key' => 'chatbot_file_hash',
+					'value' => $hash,
+				),
+			),
+		) );
+
+		return ! empty( $existing ) ? (int) $existing[0] : 0;
+	}
+
+	private function extract_text_from_file( $file_path, $mime_type ) {
+		$this->last_extraction_error = '';
+		$extension = strtolower( pathinfo( $file_path, PATHINFO_EXTENSION ) );
+		$max_bytes = $this->get_training_max_file_size();
+
+		if ( in_array( $extension, array( 'txt', 'md', 'csv' ), true ) ) {
+			return $this->extract_text_from_text_file( $file_path, $extension, $max_bytes );
+		}
+
+		if ( $extension === 'docx' || $mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ) {
+			return $this->extract_text_from_docx( $file_path );
+		}
+
+		if ( $extension === 'pdf' || $mime_type === 'application/pdf' ) {
+			return $this->extract_text_from_pdf( $file_path );
+		}
+
+		return '';
+	}
+
+	private function extract_text_from_text_file( $file_path, $extension, $max_bytes ) {
+		$handle = fopen( $file_path, 'rb' );
+		if ( ! $handle ) {
+			return '';
+		}
+
+		$content = fread( $handle, $max_bytes );
+		fclose( $handle );
+
+		if ( $extension === 'csv' ) {
+			return $this->extract_text_from_csv( $file_path );
+		}
+
+		return (string) $content;
+	}
+
+	private function extract_text_from_csv( $file_path ) {
+		$handle = fopen( $file_path, 'rb' );
+		if ( ! $handle ) {
+			return '';
+		}
+
+		$rows = array();
+		$max_rows = (int) apply_filters( 'chatbot_training_csv_max_rows', 2000 );
+		$count = 0;
+
+		while ( ( $data = fgetcsv( $handle ) ) !== false ) {
+			$rows[] = implode( ' | ', array_map( 'trim', $data ) );
+			$count++;
+			if ( $count >= $max_rows ) {
+				break;
+			}
+		}
+
+		fclose( $handle );
+		return implode( "\n", $rows );
+	}
+
+	private function extract_text_from_docx( $file_path ) {
+		if ( ! class_exists( 'ZipArchive' ) ) {
+			return '';
+		}
+
+		$zip = new ZipArchive();
+		if ( $zip->open( $file_path ) !== true ) {
+			return '';
+		}
+
+		$xml = $zip->getFromName( 'word/document.xml' );
+		$zip->close();
+
+		if ( empty( $xml ) ) {
+			return '';
+		}
+
+		$xml = str_replace( array( '</w:p>', '</w:tr>' ), "\n", $xml );
+		$text = wp_strip_all_tags( $xml );
+		$text = html_entity_decode( $text, ENT_QUOTES | ENT_XML1, 'UTF-8' );
+		return trim( $text );
+	}
+
+	private function extract_text_from_pdf( $file_path ) {
+		if ( class_exists( '\\Smalot\\PdfParser\\Parser' ) ) {
+			$parser = new \Smalot\PdfParser\Parser();
+			$pdf = $parser->parseFile( $file_path );
+			return trim( $pdf->getText() );
+		}
+
+		if ( function_exists( 'shell_exec' ) ) {
+			$cmd = 'pdftotext ' . escapeshellarg( $file_path ) . ' -';
+			$output = shell_exec( $cmd );
+			if ( ! empty( $output ) ) {
+				return trim( $output );
+			}
+		}
+
+		$this->last_extraction_error = 'Para PDF se requiere pdftotext o una libreria de parser PDF.';
+		return '';
+	}
+
+	private function render_training_documents_list() {
+		$docs = get_posts( array(
+			'post_type' => 'attachment',
+			'posts_per_page' => 10,
+			'post_status' => 'inherit',
+			'meta_key' => 'chatbot_training_source',
+			'meta_value' => 'upload',
+			'orderby' => 'date',
+			'order' => 'DESC',
+		) );
+
+		if ( empty( $docs ) ) {
+			return;
+		}
+
+		echo '<h3>Archivos indexados recientemente</h3>';
+		echo '<table class="widefat striped"><thead><tr><th>Archivo</th><th>Tipo</th><th>Chunks</th><th>Fecha</th></tr></thead><tbody>';
+
+		foreach ( $docs as $doc ) {
+			$chunks = get_post_meta( $doc->ID, 'chatbot_chunk_count', true );
+			echo '<tr>';
+			echo '<td>' . esc_html( get_the_title( $doc->ID ) ) . '</td>';
+			echo '<td>' . esc_html( $doc->post_mime_type ) . '</td>';
+			echo '<td>' . esc_html( $chunks ? $chunks : '0' ) . '</td>';
+			echo '<td>' . esc_html( get_the_date( 'Y-m-d H:i', $doc->ID ) ) . '</td>';
+			echo '</tr>';
+		}
+
+		echo '</tbody></table>';
 	}
 
 }

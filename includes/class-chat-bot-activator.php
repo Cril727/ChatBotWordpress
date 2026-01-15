@@ -31,6 +31,7 @@ class Chat_Bot_Activator {
 	 */
 	public static function activate() {
 		self::create_embeddings_table();
+		self::schedule_full_reindex();
 	}
 
 	private static function create_embeddings_table() {
@@ -51,6 +52,12 @@ class Chat_Bot_Activator {
 
 		require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 		dbDelta($sql);
+	}
+
+	private static function schedule_full_reindex() {
+		if (!wp_next_scheduled('chatbot_full_reindex')) {
+			wp_schedule_single_event(time() + 60, 'chatbot_full_reindex');
+		}
 	}
 
 }

@@ -42,6 +42,8 @@ class Chat_Bot_Chat {
                 'name' => $product->get_name(),
                 'url' => get_permalink($product->get_id()),
                 'price' => $product->get_price(),
+                'stock_qty' => $product->get_stock_quantity(),
+                'stock_status' => $product->get_stock_status(),
             ];
         }
 
@@ -116,7 +118,7 @@ class Chat_Bot_Chat {
         }
 
         // Generate response using AI or basic fallback
-        return $this->generate_response($message, $relevant_chunks, $current_url);
+        return $this->generate_response($message, $relevant_chunks, $current_url, $current_post_id);
     }
 
     /**
@@ -253,7 +255,7 @@ class Chat_Bot_Chat {
     /**
      * Generate response using OpenAI Chat Completion
      */
-    private function generate_response($message, $relevant_chunks, $current_url = '') {
+    private function generate_response($message, $relevant_chunks, $current_url = '', $current_post_id = 0) {
         // Build context
         $context = '';
         foreach ($relevant_chunks as $chunk) {
@@ -262,7 +264,7 @@ class Chat_Bot_Chat {
 
         $is_ecommerce = $this->is_ecommerce_site();
         $site_type = $is_ecommerce ? 'comercio electrónico' : 'sitio web general';
-        $current_page_info = !empty($current_url) ? "Página actual: {$current_url}" : '';
+        $current_page_info = $this->get_page_context($current_post_id, $current_url);
 
         $prompt = "
            SOBRE PRODUCTOS:
@@ -285,7 +287,7 @@ class Chat_Bot_Chat {
         $google_key = get_option('chatbot_google_api_key');
         if (!empty($google_key)) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Trying Google AI first');
-            $result = $this->generate_google_response($prompt, $message, $context);
+            $result = $this->generate_google_response($prompt, $message, $context, $current_url, $current_post_id);
             if ($result !== false) { // Assuming false means failed
                 return $result;
             }
@@ -295,7 +297,7 @@ class Chat_Bot_Chat {
         $openai_key = get_option('chatbot_openai_api_key');
         if (!empty($openai_key)) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Trying OpenAI as fallback');
-            $result = $this->generate_openai_response($prompt, $message, $context);
+            $result = $this->generate_openai_response($prompt, $message, $context, $current_url, $current_post_id);
             if ($result !== false) {
                 return $result;
             }
@@ -303,17 +305,17 @@ class Chat_Bot_Chat {
 
         // Fallback to basic
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Using basic response');
-        return $this->generate_basic_response($message, $context, $current_url);
+        return $this->generate_basic_response($message, $context, $current_url, $current_post_id);
     }
 
-    private function generate_openai_response($prompt, $message, $context) {
+    private function generate_openai_response($prompt, $message, $context, $current_url = '', $current_post_id = 0) {
         $api_key = get_option('chatbot_openai_api_key');
         $model = get_option('chatbot_openai_model', 'gpt-3.5-turbo');
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: OpenAI API key present: ' . (!empty($api_key) ? 'Yes' : 'No') . ', Model: ' . $model);
 
         if (!$api_key) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: No OpenAI API key, using basic response');
-            return $this->generate_basic_response($message, $context);
+            return $this->generate_basic_response($message, $context, $current_url, $current_post_id);
         }
 
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Sending prompt to OpenAI: ' . substr($prompt, 0, 200) . '...');
@@ -359,14 +361,14 @@ class Chat_Bot_Chat {
         return $content;
     }
 
-    private function generate_google_response($prompt, $message, $context) {
+    private function generate_google_response($prompt, $message, $context, $current_url = '', $current_post_id = 0) {
         $api_key = get_option('chatbot_google_api_key');
         $model = get_option('chatbot_google_model', 'gemini-pro');
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Google API key present: ' . (!empty($api_key) ? 'Yes' : 'No') . ', Model: ' . $model);
 
         if (!$api_key) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: No Google API key, using basic response');
-            return $this->generate_basic_response($message, $context);
+            return $this->generate_basic_response($message, $context, $current_url, $current_post_id);
         }
 
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Sending prompt to Google AI: ' . substr($prompt, 0, 200) . '...');
@@ -417,10 +419,17 @@ class Chat_Bot_Chat {
     /**
      * Generate a basic response when API key is not available
      */
-    private function generate_basic_response($message, $context, $current_url = '') {
+    private function generate_basic_response($message, $context, $current_url = '', $current_post_id = 0) {
         // Simple keyword-based response generation
         $message_lower = strtolower($message);
         $context_lower = strtolower($context);
+
+        if (strpos($message_lower, 'landing') !== false) {
+            $is_landing = $this->is_landing_page($current_post_id, $current_url);
+            return $is_landing
+                ? 'Sí, esta página parece una landing page.'
+                : 'No, no parece ser una landing page.';
+        }
 
         // Basic responses for common questions
         if (strpos($message_lower, 'hola') !== false || strpos($message_lower, 'hello') !== false) {
@@ -472,7 +481,13 @@ class Chat_Bot_Chat {
             if (!empty($products)) {
                 $response = "¡Hola! Encontré algunos productos relacionados:\n\n";
                 foreach ($products as $product) {
-                    $response .= "**" . $product['name'] . "** - Precio: $" . $product['price'] . "\nEnlace: " . $product['url'] . "\n\n";
+                    $stock_text = '';
+                    if ($product['stock_qty'] !== null) {
+                        $stock_text = ' - Stock: ' . $product['stock_qty'];
+                    } elseif (!empty($product['stock_status'])) {
+                        $stock_text = ' - Stock: ' . $product['stock_status'];
+                    }
+                    $response .= "**" . $product['name'] . "** - Precio: $" . $product['price'] . $stock_text . "\nEnlace: " . $product['url'] . "\n\n";
                 }
                 $response .= "¿Te interesa alguno de estos productos?";
                 return $response;
@@ -494,5 +509,49 @@ class Chat_Bot_Chat {
         }
 
         return '¡Hola! No encontré información exacta sobre eso, pero nuestro sitio tiene contenido interesante. ¿Puedes contarme más sobre lo que buscas?';
+    }
+
+    private function get_page_context($current_post_id = 0, $current_url = '') {
+        $post_id = (int) $current_post_id;
+        if (!$post_id && !empty($current_url)) {
+            $post_id = (int) url_to_postid($current_url);
+        }
+
+        $parts = [];
+        if (!empty($current_url)) {
+            $parts[] = "Página actual: {$current_url}";
+        }
+        if ($post_id) {
+            $title = get_the_title($post_id);
+            $post_type = get_post_type($post_id);
+            if (!empty($title)) {
+                $parts[] = "Título: {$title}";
+            }
+            if (!empty($post_type)) {
+                $parts[] = "Tipo: {$post_type}";
+            }
+        }
+
+        $parts[] = 'Landing: ' . ($this->is_landing_page($post_id, $current_url) ? 'sí' : 'no');
+
+        return implode('. ', $parts);
+    }
+
+    private function is_landing_page($post_id = 0, $current_url = '') {
+        $post_id = (int) $post_id;
+        if (!$post_id && !empty($current_url)) {
+            $post_id = (int) url_to_postid($current_url);
+        }
+
+        if (!$post_id) {
+            return false;
+        }
+
+        $template = get_post_meta($post_id, '_wp_page_template', true);
+        $slug = get_post_field('post_name', $post_id);
+        $title = get_the_title($post_id);
+
+        $haystack = strtolower(trim($template . ' ' . $slug . ' ' . $title));
+        return strpos($haystack, 'landing') !== false;
     }
 }

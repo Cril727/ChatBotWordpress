@@ -123,11 +123,6 @@ class Chat_Bot {
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-chat-bot-chat.php';
 
 		/**
-		 * The class responsible for direct DB queries.
-		 */
-		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-chat-bot-db-query.php';
-
-		/**
 		 * The class responsible for defining all actions that occur in the admin area.
 		 */
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/class-chat-bot-admin.php';
@@ -205,8 +200,9 @@ class Chat_Bot {
 		$indexer = new Chat_Bot_Indexer();
 
 		$this->loader->add_action( 'save_post', $indexer, 'index_post' );
-		$this->loader->add_action( 'wp_insert_term', $indexer, 'index_db_metadata' ); // For categories/tags
-		$this->loader->add_action( 'plugins_loaded', $indexer, 'index_db_metadata' ); // Initial index
+		$this->loader->add_action( 'created_term', $indexer, 'index_term', 10, 3 );
+		$this->loader->add_action( 'edited_term', $indexer, 'index_term', 10, 3 );
+		$this->loader->add_action( 'chatbot_full_reindex', $indexer, 'index_all_content' );
 	}
 
 	/**

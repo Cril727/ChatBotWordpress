@@ -30,7 +30,7 @@ class Chat_Bot_Deactivator {
 	 * @since    1.0.1
 	 */
 	public static function deactivate() {
-
+		wp_clear_scheduled_hook('chatbot_full_reindex');
 	}
 
 }
