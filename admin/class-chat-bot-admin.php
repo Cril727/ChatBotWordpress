@@ -525,6 +525,17 @@ class Chat_Bot_Admin {
 	}
 
 	private function extract_text_from_pdf( $file_path ) {
+		if ( function_exists( 'shell_exec' ) ) {
+			$binary = trim( (string) shell_exec( 'command -v pdftotext' ) );
+			if ( ! empty( $binary ) ) {
+				$cmd = 'pdftotext -q ' . escapeshellarg( $file_path ) . ' -';
+				$output = shell_exec( $cmd );
+				if ( ! empty( $output ) ) {
+					return trim( $output );
+				}
+			}
+		}
+
 		$vendor_autoload = plugin_dir_path( dirname( __FILE__ ) ) . 'includes/vendor/smalot/pdfparser/autoload.php';
 		if ( file_exists( $vendor_autoload ) ) {
 			require_once $vendor_autoload;
@@ -551,15 +562,7 @@ class Chat_Bot_Admin {
 			}
 		}
 
-		if ( function_exists( 'shell_exec' ) ) {
-			$cmd = 'pdftotext ' . escapeshellarg( $file_path ) . ' -';
-			$output = shell_exec( $cmd );
-			if ( ! empty( $output ) ) {
-				return trim( $output );
-			}
-		}
-
-		$this->last_extraction_error = 'No fue posible extraer texto del PDF. Intenta instalar pdftotext o un parser PDF.';
+		$this->last_extraction_error = 'No fue posible extraer texto del PDF con pdftotext ni con el parser integrado.';
 		return '';
 	}
 
