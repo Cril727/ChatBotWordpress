@@ -184,20 +184,78 @@ class Chat_Bot_Chat {
             list($title, $body) = explode(': ', $chunk_text, 2);
             $title = trim($title);
             if ($title !== '') {
-                return $title;
+                return $this->format_topic_title($title);
             }
         }
 
         return '';
     }
 
+    private function format_topic_title($title) {
+        $title = trim((string) $title);
+        if ($title === '') {
+            return '';
+        }
+
+        $title = str_replace(array('_', '-'), ' ', $title);
+        $title = preg_replace('/\b\\S+\\.(pdf|docx|txt|md|csv)\\b/i', '', $title);
+        $title = preg_replace('/\s+/', ' ', $title);
+
+        return trim($title);
+    }
+
+    private function derive_topic_from_text($text) {
+        $text = wp_strip_all_tags((string) $text);
+        $text = preg_replace('/\\bhttps?:\\/\\/\\S+/i', '', $text);
+        $text = preg_replace('/\\b\\S+\\.(pdf|docx|txt|md|csv)\\b/i', '', $text);
+        $text = preg_replace('/\s+/', ' ', $text);
+        $text = trim($text);
+
+        if ($text === '') {
+            return '';
+        }
+
+        $text = preg_replace('/^(tema|titulo|t[íi]tulo|asunto|consulta)\\s*:\\s*/i', '', $text);
+
+        $sentences = preg_split('/[\\r\\n]+|(?<=[\\.!\\?])\\s+/', $text);
+        foreach ($sentences as $sentence) {
+            $sentence = trim($sentence, " \t\n\r\0\x0B-–—:;,.!?\"'");
+            if ($sentence === '') {
+                continue;
+            }
+
+            $words = preg_split('/\s+/', $sentence, -1, PREG_SPLIT_NO_EMPTY);
+            if (count($words) < 4) {
+                continue;
+            }
+
+            $candidate = implode(' ', array_slice($words, 0, 10));
+            $candidate = $this->format_topic_title($candidate);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        $words = preg_split('/\s+/', $text, -1, PREG_SPLIT_NO_EMPTY);
+        $candidate = implode(' ', array_slice($words, 0, 10));
+        return $this->format_topic_title($candidate);
+    }
+
     private function infer_topic_from_chunks($relevant_chunks) {
         foreach ($relevant_chunks as $chunk) {
+            if (!empty($chunk['chunk'])) {
+                $topic = $this->derive_topic_from_text($chunk['chunk']);
+                if (!empty($topic)) {
+                    return $topic;
+                }
+            }
+
             $source_id = isset($chunk['source_id']) ? (int) $chunk['source_id'] : 0;
-            if ($source_id) {
+            $source_type = isset($chunk['source_type']) ? $chunk['source_type'] : '';
+            if ($source_id && $source_type !== 'file') {
                 $title = get_the_title($source_id);
                 if (!empty($title)) {
-                    return $title;
+                    return $this->format_topic_title($title);
                 }
             }
 
@@ -226,7 +284,7 @@ class Chat_Bot_Chat {
     private function build_no_context_response($message, $conversation_state) {
         $topic = '';
         if (is_array($conversation_state) && !empty($conversation_state['topic'])) {
-            $topic = $conversation_state['topic'];
+            $topic = $this->format_topic_title($conversation_state['topic']);
         }
 
         if (!empty($topic)) {
@@ -563,7 +621,7 @@ class Chat_Bot_Chat {
         $active_topic = '';
         $last_question = '';
         if (is_array($conversation_state)) {
-            $active_topic = !empty($conversation_state['topic']) ? $conversation_state['topic'] : '';
+            $active_topic = !empty($conversation_state['topic']) ? $this->format_topic_title($conversation_state['topic']) : '';
             $last_question = !empty($conversation_state['last_question']) ? $conversation_state['last_question'] : '';
         }
 
