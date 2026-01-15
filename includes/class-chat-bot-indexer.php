@@ -3,7 +3,7 @@
 /**
  * Content indexing functionality for the chatbot
  *
- * @since      1.0.1
+ * @since      1.0.2
  * @package    Chat_Bot
  * @subpackage Chat_Bot/includes
  */

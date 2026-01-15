@@ -6,7 +6,7 @@
  * This is a lightweight parser that handles common FlateDecode streams and
  * standard text operators (Tj/TJ). It is not a full PDF implementation.
  *
- * @since      1.0.1
+ * @since      1.0.2
  * @package    Chat_Bot
  * @subpackage Chat_Bot/includes
  */
