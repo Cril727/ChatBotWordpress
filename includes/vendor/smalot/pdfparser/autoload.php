@@ -11,7 +11,7 @@ spl_autoload_register( function ( $class ) {
 	}
 
 	$relative = substr( $class, $prefix_len );
-	$path = __DIR__ . '/src/' . str_replace( '\\', '/', $relative ) . '.php';
+	$path = __DIR__ . '/src/Smalot/PdfParser/' . str_replace( '\\', '/', $relative ) . '.php';
 	if ( file_exists( $path ) ) {
 		require_once $path;
 	}
