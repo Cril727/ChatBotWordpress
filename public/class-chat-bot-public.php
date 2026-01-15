@@ -96,13 +96,6 @@ class Chat_Bot_Public {
 		 * class.
 		 */
 
-		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/chat-bot-public.js', array( 'jquery' ), $this->version, false );
-
-		wp_localize_script( $this->plugin_name, 'chatbot_ajax', array(
-			'ajax_url' => admin_url( 'admin-ajax.php' ),
-			'nonce' => wp_create_nonce( 'chatbot_nonce' ),
-		) );
-
 		$ui_settings = array(
 			'bot_name' => get_option( 'chatbot_bot_name', 'Chatbot' ),
 			'button_label' => get_option( 'chatbot_button_label', '💬' ),
@@ -114,6 +107,14 @@ class Chat_Bot_Public {
 			'widget_height' => get_option( 'chatbot_widget_height', '' ),
 			'font_family' => get_option( 'chatbot_font_family', '' ),
 		);
+
+		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/chat-bot-public.js', array( 'jquery' ), $this->version, false );
+
+		wp_localize_script( $this->plugin_name, 'chatbot_ajax', array(
+			'ajax_url' => admin_url( 'admin-ajax.php' ),
+			'nonce' => wp_create_nonce( 'chatbot_nonce' ),
+			'ui_settings' => $ui_settings,
+		) );
 
 		wp_add_inline_script(
 			$this->plugin_name,

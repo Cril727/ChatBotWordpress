@@ -3,8 +3,6 @@
 
 	$(function () {
 
-		const settings = window.chatbot_ui_settings || {};
-
 		$('body').append(`
 			<div id="neurorag-bot-widget" class="neurorag-bot-pos-bottom-right">
 				<button id="neurorag-bot-button">💬</button>
@@ -40,7 +38,18 @@
 
 		let enviando = false;
 
+		function getUiSettings() {
+			if (window.chatbot_ui_settings) {
+				return window.chatbot_ui_settings;
+			}
+			if (window.chatbot_ajax && chatbot_ajax.ui_settings) {
+				return chatbot_ajax.ui_settings;
+			}
+			return {};
+		}
+
 		function applyUiSettings() {
+			const settings = getUiSettings();
 			const botName = settings.bot_name || 'Chatbot';
 			const buttonLabel = settings.button_label || '💬';
 			const position = settings.position || 'bottom-right';
