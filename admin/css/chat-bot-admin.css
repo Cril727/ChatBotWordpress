@@ -167,6 +167,32 @@
     background: #fdfdfd;
 }
 
+.chatbot-test-panel {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid #dcdcde;
+}
+
+.chatbot-test-result {
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+}
+
+.chatbot-test-result.is-success {
+    background: #ecfdf3;
+    border-color: #16a34a;
+    color: #166534;
+}
+
+.chatbot-test-result.is-error {
+    background: #fef2f2;
+    border-color: #dc2626;
+    color: #991b1b;
+}
+
 .chatbot-palette-list {
     display: flex;
     flex-wrap: wrap;

@@ -57,6 +57,7 @@ class Chat_Bot_Admin {
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
 		add_action( 'admin_post_chatbot_upload_training_file', array( $this, 'handle_training_file_upload' ) );
 		add_action( 'admin_post_chatbot_delete_training_file', array( $this, 'handle_training_file_delete' ) );
+		add_action( 'wp_ajax_chatbot_test_ai', array( $this, 'handle_test_ai' ) );
 
 	}
 
@@ -107,6 +108,10 @@ class Chat_Bot_Admin {
 			wp_enqueue_media();
 		}
 		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/chat-bot-admin.js', array( 'jquery', 'wp-color-picker' ), $this->version, true );
+		wp_localize_script( $this->plugin_name, 'chatbot_admin', array(
+			'ajax_url' => admin_url( 'admin-ajax.php' ),
+			'nonce' => wp_create_nonce( 'chatbot_admin_nonce' ),
+		) );
 
 	}
 
@@ -323,6 +328,12 @@ class Chat_Bot_Admin {
 				submit_button();
 				?>
 			</form>
+			<div class="chatbot-test-panel">
+				<h2>Prueba de conexion</h2>
+				<p class="description">Comprueba si las claves y el modelo de IA estan funcionando correctamente.</p>
+				<button type="button" class="button button-secondary chatbot-test-ai">Probar conexion</button>
+				<div class="chatbot-test-result" role="status" aria-live="polite"></div>
+			</div>
 		</div>
 		<?php
 	}
@@ -609,6 +620,145 @@ class Chat_Bot_Admin {
 		delete_transient( 'chatbot_training_notice' );
 
 		echo '<div class="notice notice-' . esc_attr( $type ) . ' is-dismissible"><p>' . esc_html( $message ) . '</p></div>';
+	}
+
+	public function handle_test_ai() {
+		check_ajax_referer( 'chatbot_admin_nonce', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => 'No tienes permisos para ejecutar esta prueba.' ) );
+		}
+
+		$results = array();
+
+		$openai_key = get_option( 'chatbot_openai_api_key' );
+		$openai_model = get_option( 'chatbot_openai_model', 'gpt-3.5-turbo' );
+		if ( empty( $openai_key ) ) {
+			$results['openai'] = array(
+				'status' => 'missing',
+				'message' => 'Falta la clave de OpenAI.',
+			);
+		} else {
+			$results['openai'] = $this->test_openai_connection( $openai_key, $openai_model );
+		}
+
+		$google_key = get_option( 'chatbot_google_api_key' );
+		$google_model = get_option( 'chatbot_google_model', 'gemini-pro' );
+		if ( empty( $google_key ) ) {
+			$results['google'] = array(
+				'status' => 'missing',
+				'message' => 'Falta la clave de Google AI.',
+			);
+		} else {
+			$results['google'] = $this->test_google_connection( $google_key, $google_model );
+		}
+
+		$has_error = false;
+		foreach ( $results as $provider => $result ) {
+			if ( ! empty( $result['status'] ) && $result['status'] === 'error' ) {
+				$has_error = true;
+				break;
+			}
+		}
+
+		wp_send_json_success( array(
+			'ok' => ! $has_error,
+			'results' => $results,
+		) );
+	}
+
+	private function test_openai_connection( $api_key, $model ) {
+		$response = wp_remote_post( 'https://api.openai.com/v1/chat/completions', array(
+			'headers' => array(
+				'Authorization' => 'Bearer ' . $api_key,
+				'Content-Type' => 'application/json',
+			),
+			'body' => wp_json_encode( array(
+				'model' => $model,
+				'messages' => array(
+					array( 'role' => 'system', 'content' => 'Prueba de conexion.' ),
+					array( 'role' => 'user', 'content' => 'Responde OK.' ),
+				),
+				'max_tokens' => 5,
+			) ),
+			'timeout' => 20,
+		) );
+
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'status' => 'error',
+				'message' => 'Error de conexion con OpenAI: ' . $response->get_error_message(),
+			);
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( $code >= 400 ) {
+			$message = $body['error']['message'] ?? 'Error desconocido en OpenAI.';
+			if ( ! empty( $body['error']['type'] ) && $body['error']['type'] === 'insufficient_quota' ) {
+				$message = 'OpenAI reporta cuota insuficiente.';
+			}
+			if ( stripos( $message, 'quota' ) !== false ) {
+				$message = 'OpenAI reporta cuota insuficiente.';
+			}
+			return array(
+				'status' => 'error',
+				'message' => $message,
+				'code' => $code,
+			);
+		}
+
+		return array(
+			'status' => 'ok',
+			'message' => 'OpenAI respondio correctamente.',
+		);
+	}
+
+	private function test_google_connection( $api_key, $model ) {
+		$url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode( $model ) . ':generateContent?key=' . $api_key;
+		$response = wp_remote_post( $url, array(
+			'headers' => array(
+				'Content-Type' => 'application/json',
+			),
+			'body' => wp_json_encode( array(
+				'contents' => array(
+					array(
+						'parts' => array(
+							array( 'text' => 'Responde OK.' ),
+						),
+					),
+				),
+				'generationConfig' => array(
+					'maxOutputTokens' => 5,
+				),
+			) ),
+			'timeout' => 20,
+		) );
+
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'status' => 'error',
+				'message' => 'Error de conexion con Google AI: ' . $response->get_error_message(),
+			);
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( $code >= 400 || isset( $body['error'] ) ) {
+			$message = $body['error']['message'] ?? 'Error desconocido en Google AI.';
+			if ( stripos( $message, 'quota' ) !== false ) {
+				$message = 'Google AI reporta cuota insuficiente.';
+			}
+			return array(
+				'status' => 'error',
+				'message' => $message,
+				'code' => $code,
+			);
+		}
+
+		return array(
+			'status' => 'ok',
+			'message' => 'Google AI respondio correctamente.',
+		);
 	}
 
 	private function set_training_notice( $type, $message ) {

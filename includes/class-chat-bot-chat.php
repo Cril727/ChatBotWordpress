@@ -541,7 +541,9 @@ class Chat_Bot_Chat {
      * Generate response using OpenAI Chat Completion
      */
     private function generate_response($message, $relevant_chunks, $current_url = '', $current_post_id = 0, $conversation_state = array(), $no_context = false) {
-        if ($no_context) {
+        $google_key = get_option('chatbot_google_api_key');
+        $openai_key = get_option('chatbot_openai_api_key');
+        if ($no_context && empty($google_key) && empty($openai_key)) {
             return $this->build_no_context_response($message, $conversation_state);
         }
 
@@ -549,6 +551,9 @@ class Chat_Bot_Chat {
         $context = '';
         foreach ($relevant_chunks as $chunk) {
             $context .= $chunk['chunk'] . "\n";
+        }
+        if ($no_context) {
+            $context = '';
         }
 
         $is_ecommerce = $this->is_ecommerce_site();
@@ -565,6 +570,9 @@ class Chat_Bot_Chat {
         $topic_line = $active_topic !== '' ? $active_topic : 'sin tema';
         $last_line = $last_question !== '' ? $last_question : 'sin pregunta previa';
 
+        $context_status = $no_context ? 'SIN_CONTEXTO' : 'CON_CONTEXTO';
+        $no_context_response = $this->build_no_context_response($message, $conversation_state);
+
         $prompt = "
          CONTEXTO DE CONVERSACION:
          - Tema activo: {$topic_line}
@@ -572,6 +580,7 @@ class Chat_Bot_Chat {
          - Mantener el tema activo hasta que el usuario pida cambiarlo.
          - Si la pregunta es ambigua, pedir una aclaracion breve.
          - Si el contexto no contiene la respuesta, decirlo claramente y ofrecer seguir con el tema actual o cambiarlo.
+         - Estado del contexto: {$context_status}. Si es SIN_CONTEXTO, responde con: {$no_context_response}
 
          SOBRE PRODUCTOS:
          - Este sitio es un {$site_type}.
@@ -590,20 +599,18 @@ class Chat_Bot_Chat {
          Contexto del sitio web:\n {$context} \n\nPregunta del usuario: {$message} \n\nResponde basandote en el contexto proporcionado.";
 
         // Try Google first if key is set
-        $google_key = get_option('chatbot_google_api_key');
         if (!empty($google_key)) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Trying Google AI first');
-            $result = $this->generate_google_response($prompt, $message, $context, $current_url, $current_post_id, $conversation_state);
+            $result = $this->generate_google_response($prompt, $message, $context, $current_url, $current_post_id, $conversation_state, $no_context);
             if ($result !== false) { // Assuming false means failed
                 return $result;
             }
         }
 
         // Try OpenAI if key is set
-        $openai_key = get_option('chatbot_openai_api_key');
         if (!empty($openai_key)) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Trying OpenAI as fallback');
-            $result = $this->generate_openai_response($prompt, $message, $context, $current_url, $current_post_id, $conversation_state);
+            $result = $this->generate_openai_response($prompt, $message, $context, $current_url, $current_post_id, $conversation_state, $no_context);
             if ($result !== false) {
                 return $result;
             }
@@ -611,17 +618,17 @@ class Chat_Bot_Chat {
 
         // Fallback to basic
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Using basic response');
-        return $this->generate_basic_response($message, $context, $current_url, $current_post_id, $conversation_state, false);
+        return $this->generate_basic_response($message, $context, $current_url, $current_post_id, $conversation_state, $no_context);
     }
 
-    private function generate_openai_response($prompt, $message, $context, $current_url = '', $current_post_id = 0, $conversation_state = array()) {
+    private function generate_openai_response($prompt, $message, $context, $current_url = '', $current_post_id = 0, $conversation_state = array(), $no_context = false) {
         $api_key = get_option('chatbot_openai_api_key');
         $model = get_option('chatbot_openai_model', 'gpt-3.5-turbo');
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: OpenAI API key present: ' . (!empty($api_key) ? 'Yes' : 'No') . ', Model: ' . $model);
 
         if (!$api_key) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: No OpenAI API key, using basic response');
-            return $this->generate_basic_response($message, $context, $current_url, $current_post_id, $conversation_state, false);
+            return $this->generate_basic_response($message, $context, $current_url, $current_post_id, $conversation_state, $no_context);
         }
 
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Sending prompt to OpenAI: ' . substr($prompt, 0, 200) . '...');
@@ -667,14 +674,14 @@ class Chat_Bot_Chat {
         return $content;
     }
 
-    private function generate_google_response($prompt, $message, $context, $current_url = '', $current_post_id = 0, $conversation_state = array()) {
+    private function generate_google_response($prompt, $message, $context, $current_url = '', $current_post_id = 0, $conversation_state = array(), $no_context = false) {
         $api_key = get_option('chatbot_google_api_key');
         $model = get_option('chatbot_google_model', 'gemini-pro');
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Google API key present: ' . (!empty($api_key) ? 'Yes' : 'No') . ', Model: ' . $model);
 
         if (!$api_key) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: No Google API key, using basic response');
-            return $this->generate_basic_response($message, $context, $current_url, $current_post_id, $conversation_state, false);
+            return $this->generate_basic_response($message, $context, $current_url, $current_post_id, $conversation_state, $no_context);
         }
 
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Sending prompt to Google AI: ' . substr($prompt, 0, 200) . '...');

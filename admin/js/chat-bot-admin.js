@@ -176,5 +176,41 @@
 			updateIconPreview($iconField.val() || '');
 			applyPreview();
 		}
+
+		const $testButton = $('.chatbot-test-ai');
+		if ($testButton.length && window.chatbot_admin) {
+			const $result = $('.chatbot-test-result');
+			$testButton.on('click', function(e) {
+				e.preventDefault();
+				$result.removeClass('is-success is-error').text('Probando...');
+				$.ajax({
+					url: chatbot_admin.ajax_url,
+					method: 'POST',
+					dataType: 'json',
+					data: {
+						action: 'chatbot_test_ai',
+						nonce: chatbot_admin.nonce
+					}
+				})
+				.done(function(response) {
+					if (!response || !response.success || !response.data) {
+						$result.addClass('is-error').text('No se pudo completar la prueba.');
+						return;
+					}
+					const results = response.data.results || {};
+					const messages = [];
+					if (results.openai) {
+						messages.push('OpenAI: ' + results.openai.message);
+					}
+					if (results.google) {
+						messages.push('Google AI: ' + results.google.message);
+					}
+					$result.addClass(response.data.ok ? 'is-success' : 'is-error').text(messages.join(' | '));
+				})
+				.fail(function() {
+					$result.addClass('is-error').text('Error al conectar con el servidor.');
+				});
+			});
+		}
 	});
 })( jQuery );
