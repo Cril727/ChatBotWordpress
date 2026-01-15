@@ -307,13 +307,45 @@ class Chat_Bot_Admin {
 			</div>
 
 			<div id="chatbot-tab-design" class="chatbot-tab-panel">
-				<form method="post" action="options.php">
-					<?php
-					settings_fields( 'chatbot_settings' );
-					do_settings_sections( 'chatbot_settings_design' );
-					submit_button();
-					?>
-				</form>
+				<div class="chatbot-design-grid">
+					<div class="chatbot-design-form">
+						<form method="post" action="options.php">
+							<?php
+							settings_fields( 'chatbot_settings' );
+							do_settings_sections( 'chatbot_settings_design' );
+							?>
+							<div class="chatbot-color-presets">
+								<p><strong>Paletas rápidas</strong></p>
+								<div class="chatbot-palette-list">
+									<button type="button" class="chatbot-color-preset" data-primary="#10b981" data-accent="#3b82f6">Verde/Azul</button>
+									<button type="button" class="chatbot-color-preset" data-primary="#ef4444" data-accent="#f97316">Rojo/Naranja</button>
+									<button type="button" class="chatbot-color-preset" data-primary="#6366f1" data-accent="#0ea5e9">Indigo/Celeste</button>
+									<button type="button" class="chatbot-color-preset" data-primary="#0f172a" data-accent="#64748b">Grafito</button>
+									<button type="button" class="chatbot-color-preset" data-primary="#14b8a6" data-accent="#22c55e">Teal/Verde</button>
+								</div>
+							</div>
+							<?php submit_button(); ?>
+						</form>
+					</div>
+					<div class="chatbot-design-preview">
+						<div class="chatbot-preview-card">
+							<div class="chatbot-preview-widget" id="chatbot-design-preview">
+								<div class="chatbot-preview-header">
+									<span class="chatbot-preview-title">Chatbot</span>
+								</div>
+								<div class="chatbot-preview-messages">
+									<div class="chatbot-preview-message chatbot-preview-message-bot">Hola, ¿en qué puedo ayudarte?</div>
+									<div class="chatbot-preview-message chatbot-preview-message-user">Quiero información sobre productos.</div>
+								</div>
+								<div class="chatbot-preview-input">Escribe tu mensaje...</div>
+							</div>
+							<div class="chatbot-preview-launcher">
+								<span class="chatbot-preview-button">💬</span>
+							</div>
+							<p class="description">Vista previa del estilo del bot. Los cambios se reflejan al instante.</p>
+						</div>
+					</div>
+				</div>
 			</div>
 		</div>
 		<?php
