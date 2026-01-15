@@ -71,11 +71,12 @@ class Chat_Bot_Chat {
      * Process a chat message and return response
      */
     public function process_message($message, $current_post_id = null, $current_url = '') {
-        $api_key = get_option('chatbot_openai_api_key');
+        $openai_key = get_option('chatbot_openai_api_key');
+        $google_key = get_option('chatbot_google_api_key');
         if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: Processing message: ' . $message . ', Post ID: ' . $current_post_id);
         $relevant_chunks = [];
 
-        if ($api_key) {
+        if ($openai_key || $google_key) {
             if (defined('WP_DEBUG') && WP_DEBUG) error_log('ChatBot Debug: API key available, generating embedding');
             // Generate embedding for the query
             $query_embedding = $this->generate_embedding($message);
@@ -231,9 +232,57 @@ class Chat_Bot_Chat {
      * Generate embedding for text
      */
     private function generate_embedding($text) {
-        $api_key = get_option('chatbot_openai_api_key');
-        if (!$api_key) return false;
+        $openai_key = get_option('chatbot_openai_api_key');
+        $google_key = get_option('chatbot_google_api_key');
+        $preferred = get_option('chatbot_embedding_provider', '');
 
+        $providers = array();
+        if ($preferred === 'openai' || $preferred === 'google') {
+            $providers[] = $preferred;
+        }
+
+        if (empty($providers)) {
+            if (!empty($openai_key)) {
+                $providers[] = 'openai';
+            }
+            if (!empty($google_key)) {
+                $providers[] = 'google';
+            }
+        } else {
+            if ($providers[0] === 'openai' && !empty($google_key)) {
+                $providers[] = 'google';
+            }
+            if ($providers[0] === 'google' && !empty($openai_key)) {
+                $providers[] = 'openai';
+            }
+        }
+
+        foreach ($providers as $provider) {
+            if ($provider === 'openai' && empty($openai_key)) {
+                continue;
+            }
+            if ($provider === 'google' && empty($google_key)) {
+                continue;
+            }
+
+            if ($provider === 'openai') {
+                $embedding = $this->generate_openai_embedding($text, $openai_key);
+            } else {
+                $embedding = $this->generate_google_embedding($text, $google_key, 'RETRIEVAL_QUERY');
+            }
+
+            if ($embedding !== false) {
+                if ($provider !== $preferred) {
+                    update_option('chatbot_embedding_provider', $provider);
+                }
+                return $embedding;
+            }
+        }
+
+        return false;
+    }
+
+    private function generate_openai_embedding($text, $api_key) {
         $model = get_option('chatbot_openai_embedding_model', 'text-embedding-3-small');
         $model = apply_filters('chatbot_openai_embedding_model', $model);
 
@@ -252,7 +301,46 @@ class Chat_Bot_Chat {
         if (is_wp_error($response)) return false;
 
         $body = json_decode(wp_remote_retrieve_body($response), true);
+        if (isset($body['error'])) {
+            return false;
+        }
+
         return $body['data'][0]['embedding'] ?? false;
+    }
+
+    private function generate_google_embedding($text, $api_key, $task_type = '') {
+        $model = get_option('chatbot_google_embedding_model', 'text-embedding-004');
+        $model = apply_filters('chatbot_google_embedding_model', $model);
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':embedContent?key=' . $api_key;
+
+        $body = array(
+            'content' => array(
+                'parts' => array(
+                    array('text' => $text),
+                ),
+            ),
+        );
+
+        if (!empty($task_type)) {
+            $body['taskType'] = $task_type;
+        }
+
+        $response = wp_remote_post($url, array(
+            'headers' => array(
+                'Content-Type' => 'application/json',
+            ),
+            'body' => wp_json_encode($body),
+            'timeout' => 30,
+        ));
+
+        if (is_wp_error($response)) return false;
+
+        $payload = json_decode(wp_remote_retrieve_body($response), true);
+        if (isset($payload['error'])) {
+            return false;
+        }
+
+        return $payload['embedding']['values'] ?? false;
     }
 
     /**

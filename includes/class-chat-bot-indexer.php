@@ -294,12 +294,62 @@ class Chat_Bot_Indexer {
      */
     private function generate_embedding($text) {
         $this->last_embedding_error = '';
-        $api_key = get_option('chatbot_openai_api_key');
-        if (!$api_key) {
-            $this->last_embedding_error = 'Falta la clave de OpenAI.';
+        $openai_key = get_option('chatbot_openai_api_key');
+        $google_key = get_option('chatbot_google_api_key');
+        $preferred = get_option('chatbot_embedding_provider', '');
+
+        $providers = array();
+        if ($preferred === 'openai' || $preferred === 'google') {
+            $providers[] = $preferred;
+        }
+
+        if (empty($providers)) {
+            if (!empty($openai_key)) {
+                $providers[] = 'openai';
+            }
+            if (!empty($google_key)) {
+                $providers[] = 'google';
+            }
+        } else {
+            if ($providers[0] === 'openai' && !empty($google_key)) {
+                $providers[] = 'google';
+            }
+            if ($providers[0] === 'google' && !empty($openai_key)) {
+                $providers[] = 'openai';
+            }
+        }
+
+        if (empty($providers)) {
+            $this->last_embedding_error = 'No hay claves de OpenAI o Google AI configuradas.';
             return false;
         }
 
+        foreach ($providers as $provider) {
+            if ($provider === 'openai' && empty($openai_key)) {
+                continue;
+            }
+            if ($provider === 'google' && empty($google_key)) {
+                continue;
+            }
+
+            if ($provider === 'openai') {
+                $embedding = $this->generate_openai_embedding($text, $openai_key);
+            } else {
+                $embedding = $this->generate_google_embedding($text, $google_key, 'RETRIEVAL_DOCUMENT');
+            }
+
+            if ($embedding !== false) {
+                if ($provider !== $preferred) {
+                    update_option('chatbot_embedding_provider', $provider);
+                }
+                return $embedding;
+            }
+        }
+
+        return false;
+    }
+
+    private function generate_openai_embedding($text, $api_key) {
         $model = get_option('chatbot_openai_embedding_model', 'text-embedding-3-small');
         $model = apply_filters('chatbot_openai_embedding_model', $model);
 
@@ -329,6 +379,51 @@ class Chat_Bot_Indexer {
         $embedding = $body['data'][0]['embedding'] ?? null;
         if ($embedding === null) {
             $this->last_embedding_error = 'Respuesta invalida del servicio de embeddings.';
+            return false;
+        }
+
+        return $embedding;
+    }
+
+    private function generate_google_embedding($text, $api_key, $task_type = '') {
+        $model = get_option('chatbot_google_embedding_model', 'text-embedding-004');
+        $model = apply_filters('chatbot_google_embedding_model', $model);
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':embedContent?key=' . $api_key;
+
+        $body = array(
+            'content' => array(
+                'parts' => array(
+                    array('text' => $text),
+                ),
+            ),
+        );
+
+        if (!empty($task_type)) {
+            $body['taskType'] = $task_type;
+        }
+
+        $response = wp_remote_post($url, array(
+            'headers' => array(
+                'Content-Type' => 'application/json',
+            ),
+            'body' => wp_json_encode($body),
+            'timeout' => 30,
+        ));
+
+        if (is_wp_error($response)) {
+            $this->last_embedding_error = $response->get_error_message();
+            return false;
+        }
+
+        $payload = json_decode(wp_remote_retrieve_body($response), true);
+        if (isset($payload['error']['message'])) {
+            $this->last_embedding_error = $payload['error']['message'];
+            return false;
+        }
+
+        $embedding = $payload['embedding']['values'] ?? null;
+        if ($embedding === null) {
+            $this->last_embedding_error = 'Respuesta invalida del servicio de embeddings (Google).';
             return false;
         }
 

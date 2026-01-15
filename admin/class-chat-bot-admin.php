@@ -299,8 +299,10 @@ class Chat_Bot_Admin {
 
 		check_admin_referer( 'chatbot_upload_training_file' );
 
-		if ( empty( get_option( 'chatbot_openai_api_key' ) ) ) {
-			$this->set_training_notice( 'error', 'Configura la clave de OpenAI antes de entrenar con archivos.' );
+		$openai_key = get_option( 'chatbot_openai_api_key' );
+		$google_key = get_option( 'chatbot_google_api_key' );
+		if ( empty( $openai_key ) && empty( $google_key ) ) {
+			$this->set_training_notice( 'error', 'Configura una clave de OpenAI o Google AI antes de entrenar con archivos.' );
 			wp_safe_redirect( admin_url( 'admin.php?page=chat-bot-settings' ) );
 			exit;
 		}
