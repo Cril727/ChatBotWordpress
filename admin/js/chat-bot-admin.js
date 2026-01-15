@@ -45,15 +45,32 @@
 			const $previewTitle = $preview.find('.chatbot-preview-title');
 			const $previewButton = $preview.find('.chatbot-preview-button');
 			const $previewInput = $preview.find('.chatbot-preview-input');
+			const $iconField = $('input[name="chatbot_button_icon"]');
+			const $iconPreview = $('.chatbot-icon-preview');
+			const $iconPreviewEmpty = $('.chatbot-icon-preview-empty');
 
 			function getFieldValue(selector, fallback) {
 				const value = $(selector).val();
 				return value !== undefined && value !== '' ? value : fallback;
 			}
 
+			function updateIconPreview(url) {
+				if (!$iconPreview.length) {
+					return;
+				}
+				if (url) {
+					$iconPreview.attr('src', url).show();
+					$iconPreviewEmpty.hide();
+				} else {
+					$iconPreview.attr('src', '').hide();
+					$iconPreviewEmpty.show();
+				}
+			}
+
 			function applyPreview() {
 				const botName = getFieldValue('input[name="chatbot_bot_name"]', 'Chatbot');
 				const buttonLabel = getFieldValue('input[name="chatbot_button_label"]', '💬');
+				const buttonIcon = getFieldValue('input[name="chatbot_button_icon"]', '');
 				const theme = getFieldValue('select[name="chatbot_theme"]', 'light');
 				const position = getFieldValue('select[name="chatbot_position"]', 'bottom-right');
 				const primary = getFieldValue('input[name="chatbot_primary_color"]', '#10b981');
@@ -88,12 +105,21 @@
 				}
 
 				if ($previewButton.length) {
-					$previewButton.text(buttonLabel);
+					if (buttonIcon) {
+						$previewButton.empty().append($('<img>', {
+							src: buttonIcon,
+							alt: buttonLabel || botName
+						}));
+					} else {
+						$previewButton.text(buttonLabel);
+					}
 				}
 
 				if ($previewInput.length) {
 					$previewInput.text('Escribe tu mensaje...');
 				}
+
+				updateIconPreview(buttonIcon);
 			}
 
 			$('.chatbot-settings').on('input change', 'input, select', function() {
@@ -114,6 +140,40 @@
 				}
 			});
 
+			if ($iconField.length && window.wp && wp.media) {
+				let mediaFrame = null;
+				$('.chatbot-icon-select').on('click', function(e) {
+					e.preventDefault();
+					if (mediaFrame) {
+						mediaFrame.open();
+						return;
+					}
+					mediaFrame = wp.media({
+						title: 'Seleccionar icono del boton',
+						button: { text: 'Usar esta imagen' },
+						multiple: false
+					});
+					mediaFrame.on('select', function() {
+						const selection = mediaFrame.state().get('selection').first();
+						if (!selection) {
+							return;
+						}
+						const attachment = selection.toJSON();
+						const url = attachment.url || '';
+						$iconField.val(url).trigger('input');
+						updateIconPreview(url);
+					});
+					mediaFrame.open();
+				});
+
+				$('.chatbot-icon-clear').on('click', function(e) {
+					e.preventDefault();
+					$iconField.val('').trigger('input');
+					updateIconPreview('');
+				});
+			}
+
+			updateIconPreview($iconField.val() || '');
 			applyPreview();
 		}
 	});

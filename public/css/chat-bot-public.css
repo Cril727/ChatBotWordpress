@@ -71,11 +71,21 @@ body.admin-bar .neurorag-bot-pos-top-left {
     cursor: pointer;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     transition: transform 0.2s, box-shadow 0.2s;
+    overflow: hidden;
 }
 
 #neurorag-bot-button:hover {
     transform: scale(1.05);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+#neurorag-bot-button img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
+    pointer-events: none;
 }
 
 #neurorag-bot-container {
@@ -366,7 +376,8 @@ body.admin-bar .neurorag-bot-pos-top-left {
 }
 
 /* Dark Theme */
-.neurorag-theme-dark {
+.neurorag-theme-dark,
+#neurorag-bot-widget[data-theme="dark"] {
     --chatbot-surface: #1f2937;
     --chatbot-surface-muted: #111827;
     --chatbot-bot-bubble: #374151;
@@ -376,59 +387,71 @@ body.admin-bar .neurorag-bot-pos-top-left {
     --chatbot-input-text: #f9fafb;
 }
 
-.neurorag-theme-dark #neurorag-bot-button {
+.neurorag-theme-dark #neurorag-bot-button,
+#neurorag-bot-widget[data-theme="dark"] #neurorag-bot-button {
     background: var(--chatbot-gradient);
     color: white;
 }
 
-.neurorag-theme-dark #neurorag-bot-container {
+.neurorag-theme-dark #neurorag-bot-container,
+#neurorag-bot-widget[data-theme="dark"] #neurorag-bot-container {
     background: #1f2937;
     color: #f9fafb;
 }
 
-.neurorag-theme-dark #neurorag-bot-header {
+.neurorag-theme-dark #neurorag-bot-header,
+#neurorag-bot-widget[data-theme="dark"] #neurorag-bot-header {
     background: var(--chatbot-gradient);
     color: white;
 }
 
-.neurorag-theme-dark #neurorag-bot-messages {
+.neurorag-theme-dark #neurorag-bot-messages,
+#neurorag-bot-widget[data-theme="dark"] #neurorag-bot-messages {
     background: var(--chatbot-surface-muted);
 }
 
-.neurorag-theme-dark .neurorag-bot-message.bot .neurorag-bot-message-content {
+.neurorag-theme-dark .neurorag-bot-message.bot .neurorag-bot-message-content,
+#neurorag-bot-widget[data-theme="dark"] .neurorag-bot-message.bot .neurorag-bot-message-content {
     background: var(--chatbot-bot-bubble);
     color: var(--chatbot-bot-text);
 }
 
-.neurorag-theme-dark .neurorag-bot-message.user .neurorag-bot-message-content {
+.neurorag-theme-dark .neurorag-bot-message.user .neurorag-bot-message-content,
+#neurorag-bot-widget[data-theme="dark"] .neurorag-bot-message.user .neurorag-bot-message-content {
     background: var(--chatbot-gradient);
     color: white;
 }
 
-.neurorag-theme-dark .neurorag-bot-typing {
+.neurorag-theme-dark .neurorag-bot-typing,
+#neurorag-bot-widget[data-theme="dark"] .neurorag-bot-typing {
     background: var(--chatbot-bot-bubble);
 }
 
-.neurorag-theme-dark .neurorag-bot-typing span {
+.neurorag-theme-dark .neurorag-bot-typing span,
+#neurorag-bot-widget[data-theme="dark"] .neurorag-bot-typing span {
     background: var(--chatbot-primary);
 }
 
-.neurorag-theme-dark #neurorag-bot-input-area {
+.neurorag-theme-dark #neurorag-bot-input-area,
+#neurorag-bot-widget[data-theme="dark"] #neurorag-bot-input-area {
     background: var(--chatbot-surface);
     border-top: 1px solid var(--chatbot-border);
 }
 
-.neurorag-theme-dark #neurorag-bot-input {
+.neurorag-theme-dark #neurorag-bot-input,
+#neurorag-bot-widget[data-theme="dark"] #neurorag-bot-input {
     background: var(--chatbot-input-bg);
     border: 1px solid var(--chatbot-border);
     color: var(--chatbot-input-text);
 }
 
-.neurorag-theme-dark #neurorag-bot-input:focus {
+.neurorag-theme-dark #neurorag-bot-input:focus,
+#neurorag-bot-widget[data-theme="dark"] #neurorag-bot-input:focus {
     border-color: var(--chatbot-primary);
 }
 
-.neurorag-theme-dark #neurorag-bot-send {
+.neurorag-theme-dark #neurorag-bot-send,
+#neurorag-bot-widget[data-theme="dark"] #neurorag-bot-send {
     background: var(--chatbot-gradient);
 }
 

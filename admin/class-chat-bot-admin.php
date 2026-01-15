@@ -103,6 +103,9 @@ class Chat_Bot_Admin {
 		 */
 
 		wp_enqueue_style( 'wp-color-picker' );
+		if ( isset( $_GET['page'] ) && $_GET['page'] === 'chat-bot-design' ) {
+			wp_enqueue_media();
+		}
 		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/chat-bot-admin.js', array( 'jquery', 'wp-color-picker' ), $this->version, true );
 
 	}
@@ -161,6 +164,7 @@ class Chat_Bot_Admin {
 
 		register_setting( 'chatbot_settings_design', 'chatbot_bot_name', array( $this, 'sanitize_bot_name' ) );
 		register_setting( 'chatbot_settings_design', 'chatbot_button_label', array( $this, 'sanitize_button_label' ) );
+		register_setting( 'chatbot_settings_design', 'chatbot_button_icon', array( $this, 'sanitize_icon_url' ) );
 		register_setting( 'chatbot_settings_design', 'chatbot_position', array( $this, 'sanitize_position' ) );
 		register_setting( 'chatbot_settings_design', 'chatbot_theme', array( $this, 'sanitize_theme' ) );
 		register_setting( 'chatbot_settings_design', 'chatbot_primary_color', array( $this, 'sanitize_color' ) );
@@ -235,6 +239,14 @@ class Chat_Bot_Admin {
 			'button_label',
 			'Texto/emoji del botón',
 			array( $this, 'button_label_field_callback' ),
+			'chatbot_settings_design',
+			'chatbot_design_section'
+		);
+
+		add_settings_field(
+			'button_icon',
+			'Icono del boton (imagen)',
+			array( $this, 'button_icon_field_callback' ),
 			'chatbot_settings_design',
 			'chatbot_design_section'
 		);
@@ -450,6 +462,26 @@ class Chat_Bot_Admin {
 		echo '<p class="description">Puede ser texto corto o un emoji (por ejemplo: 💬).</p>';
 	}
 
+	public function button_icon_field_callback() {
+		$value = get_option( 'chatbot_button_icon', false );
+		$default_icon = $this->get_default_button_icon_url();
+		$display_value = ( $value === false ) ? $default_icon : $value;
+		$preview_url = $display_value !== '' ? $display_value : '';
+
+		echo '<div class="chatbot-icon-field">';
+		echo '<input type="text" name="chatbot_button_icon" value="' . esc_attr( $display_value ) . '" class="regular-text chatbot-icon-url" data-default-icon="' . esc_attr( $default_icon ) . '" />';
+		echo '<button type="button" class="button chatbot-icon-select" id="chatbot-button-icon-select">Seleccionar imagen</button>';
+		echo '<button type="button" class="button chatbot-icon-clear">Quitar imagen</button>';
+		echo '</div>';
+
+		echo '<div class="chatbot-icon-preview-wrap">';
+		echo '<img class="chatbot-icon-preview" src="' . esc_url( $preview_url ) . '"' . ( $preview_url !== '' ? '' : ' style="display: none;"' ) . ' alt="" />';
+		echo '<span class="chatbot-icon-preview-empty"' . ( $preview_url === '' ? '' : ' style="display: none;"' ) . '>Sin imagen</span>';
+		echo '</div>';
+
+		echo '<p class="description">Selecciona una imagen para el boton. Si la dejas vacia se usa el emoji del boton. Por defecto se usa la imagen del plugin.</p>';
+	}
+
 	public function position_field_callback() {
 		$value = get_option( 'chatbot_position', 'bottom-right' );
 		$options = array(
@@ -520,6 +552,11 @@ class Chat_Bot_Admin {
 		return substr( $value, 0, 8 );
 	}
 
+	public function sanitize_icon_url( $input ) {
+		$value = esc_url_raw( trim( $input ) );
+		return $value ? $value : '';
+	}
+
 	public function sanitize_position( $input ) {
 		$allowed = array( 'bottom-right', 'bottom-left', 'top-right', 'top-left' );
 		return in_array( $input, $allowed, true ) ? $input : 'bottom-right';
@@ -554,6 +591,11 @@ class Chat_Bot_Admin {
 			return '';
 		}
 		return preg_replace( '/[^a-zA-Z0-9,\\-\\s\\\'\\"]+/', '', $value );
+	}
+
+	private function get_default_button_icon_url() {
+		$plugin_file = dirname( dirname( __FILE__ ) ) . '/chat-bot.php';
+		return plugins_url( 'public/img/img-bot.png', $plugin_file );
 	}
 
 	private function render_training_notice() {

@@ -38,6 +38,25 @@
 
 		let enviando = false;
 
+		function setTheme(isDark) {
+			$widget.toggleClass('neurorag-theme-dark', isDark);
+			$widget.attr('data-theme', isDark ? 'dark' : 'light');
+			$themeToggle.text(isDark ? '☀️' : '🌙');
+		}
+
+		function applyButtonIcon(buttonLabel, buttonIcon, botName) {
+			if (buttonIcon) {
+				$button.empty().append($('<img>', {
+					src: buttonIcon,
+					alt: buttonLabel || botName || 'Chatbot'
+				}));
+				$button.attr('aria-label', buttonLabel || botName || 'Chatbot');
+			} else {
+				$button.text(buttonLabel);
+				$button.removeAttr('aria-label');
+			}
+		}
+
 		function getUiSettings() {
 			if (window.chatbot_ui_settings) {
 				return window.chatbot_ui_settings;
@@ -52,22 +71,17 @@
 			const settings = getUiSettings();
 			const botName = settings.bot_name || 'Chatbot';
 			const buttonLabel = settings.button_label || '💬';
+			const buttonIcon = settings.button_icon || '';
 			const position = settings.position || 'bottom-right';
 			const theme = settings.theme || 'light';
 
 			$title.text(botName);
-			$button.text(buttonLabel);
+			applyButtonIcon(buttonLabel, buttonIcon, botName);
 
 			$widget.removeClass('neurorag-bot-pos-bottom-right neurorag-bot-pos-bottom-left neurorag-bot-pos-top-right neurorag-bot-pos-top-left');
 			$widget.addClass('neurorag-bot-pos-' + position);
 
-			if (theme === 'dark') {
-				$widget.addClass('neurorag-theme-dark');
-				$themeToggle.text('☀️');
-			} else {
-				$widget.removeClass('neurorag-theme-dark');
-				$themeToggle.text('🌙');
-			}
+			setTheme(theme === 'dark');
 
 			if (settings.primary_color) {
 				$widget[0].style.setProperty('--chatbot-primary', settings.primary_color);
@@ -126,9 +140,8 @@
 		});
 
 		$themeToggle.on('click', function () {
-			$widget.toggleClass('neurorag-theme-dark');
-			const isDark = $widget.hasClass('neurorag-theme-dark');
-			$themeToggle.text(isDark ? '☀️' : '🌙');
+			const isDark = !$widget.hasClass('neurorag-theme-dark');
+			setTheme(isDark);
 		});
 
 		function sendMessage() {

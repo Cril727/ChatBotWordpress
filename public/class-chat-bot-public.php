@@ -96,9 +96,15 @@ class Chat_Bot_Public {
 		 * class.
 		 */
 
+		$button_icon = get_option( 'chatbot_button_icon', false );
+		if ( $button_icon === false ) {
+			$button_icon = plugin_dir_url( __FILE__ ) . 'img/img-bot.png';
+		}
+
 		$ui_settings = array(
 			'bot_name' => get_option( 'chatbot_bot_name', 'Chatbot' ),
 			'button_label' => get_option( 'chatbot_button_label', '💬' ),
+			'button_icon' => $button_icon,
 			'position' => get_option( 'chatbot_position', 'bottom-right' ),
 			'theme' => get_option( 'chatbot_theme', 'light' ),
 			'primary_color' => get_option( 'chatbot_primary_color', '#10b981' ),
