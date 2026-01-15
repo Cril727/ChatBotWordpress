@@ -153,20 +153,21 @@ class Chat_Bot_Admin {
 	 * Register settings
 	 */
 	public function register_settings() {
-		register_setting( 'chatbot_settings', 'chatbot_provider' );
-		register_setting( 'chatbot_settings', 'chatbot_openai_api_key' );
-		register_setting( 'chatbot_settings', 'chatbot_openai_model' );
-		register_setting( 'chatbot_settings', 'chatbot_google_api_key' );
-		register_setting( 'chatbot_settings', 'chatbot_google_model' );
-		register_setting( 'chatbot_settings', 'chatbot_bot_name', array( $this, 'sanitize_bot_name' ) );
-		register_setting( 'chatbot_settings', 'chatbot_button_label', array( $this, 'sanitize_button_label' ) );
-		register_setting( 'chatbot_settings', 'chatbot_position', array( $this, 'sanitize_position' ) );
-		register_setting( 'chatbot_settings', 'chatbot_theme', array( $this, 'sanitize_theme' ) );
-		register_setting( 'chatbot_settings', 'chatbot_primary_color', array( $this, 'sanitize_color' ) );
-		register_setting( 'chatbot_settings', 'chatbot_accent_color', array( $this, 'sanitize_color' ) );
-		register_setting( 'chatbot_settings', 'chatbot_widget_width', array( $this, 'sanitize_dimension' ) );
-		register_setting( 'chatbot_settings', 'chatbot_widget_height', array( $this, 'sanitize_dimension' ) );
-		register_setting( 'chatbot_settings', 'chatbot_font_family', array( $this, 'sanitize_font_family' ) );
+		register_setting( 'chatbot_settings_ai', 'chatbot_provider' );
+		register_setting( 'chatbot_settings_ai', 'chatbot_openai_api_key' );
+		register_setting( 'chatbot_settings_ai', 'chatbot_openai_model' );
+		register_setting( 'chatbot_settings_ai', 'chatbot_google_api_key' );
+		register_setting( 'chatbot_settings_ai', 'chatbot_google_model' );
+
+		register_setting( 'chatbot_settings_design', 'chatbot_bot_name', array( $this, 'sanitize_bot_name' ) );
+		register_setting( 'chatbot_settings_design', 'chatbot_button_label', array( $this, 'sanitize_button_label' ) );
+		register_setting( 'chatbot_settings_design', 'chatbot_position', array( $this, 'sanitize_position' ) );
+		register_setting( 'chatbot_settings_design', 'chatbot_theme', array( $this, 'sanitize_theme' ) );
+		register_setting( 'chatbot_settings_design', 'chatbot_primary_color', array( $this, 'sanitize_color' ) );
+		register_setting( 'chatbot_settings_design', 'chatbot_accent_color', array( $this, 'sanitize_color' ) );
+		register_setting( 'chatbot_settings_design', 'chatbot_widget_width', array( $this, 'sanitize_dimension' ) );
+		register_setting( 'chatbot_settings_design', 'chatbot_widget_height', array( $this, 'sanitize_dimension' ) );
+		register_setting( 'chatbot_settings_design', 'chatbot_font_family', array( $this, 'sanitize_font_family' ) );
 
 		add_settings_section(
 			'chatbot_main_section',
@@ -305,7 +306,7 @@ class Chat_Bot_Admin {
 			<?php $this->render_training_notice(); ?>
 			<form method="post" action="options.php">
 				<?php
-				settings_fields( 'chatbot_settings' );
+				settings_fields( 'chatbot_settings_ai' );
 				do_settings_sections( 'chatbot_settings_ai' );
 				submit_button();
 				?>
@@ -342,7 +343,7 @@ class Chat_Bot_Admin {
 				<div class="chatbot-design-form">
 					<form method="post" action="options.php">
 						<?php
-						settings_fields( 'chatbot_settings' );
+						settings_fields( 'chatbot_settings_design' );
 						do_settings_sections( 'chatbot_settings_design' );
 						?>
 						<div class="chatbot-color-presets">
