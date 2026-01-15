@@ -102,7 +102,8 @@ class Chat_Bot_Admin {
 		 * class.
 		 */
 
-		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/chat-bot-admin.js', array( 'jquery' ), $this->version, false );
+		wp_enqueue_style( 'wp-color-picker' );
+		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/chat-bot-admin.js', array( 'jquery', 'wp-color-picker' ), $this->version, true );
 
 	}
 
@@ -144,14 +145,14 @@ class Chat_Bot_Admin {
 			'chatbot_main_section',
 			'Configuración del Proveedor de IA',
 			null,
-			'chatbot_settings'
+			'chatbot_settings_ai'
 		);
 
 		add_settings_field(
 			'provider',
 			'Proveedor de IA',
 			array( $this, 'provider_field_callback' ),
-			'chatbot_settings',
+			'chatbot_settings_ai',
 			'chatbot_main_section'
 		);
 
@@ -159,7 +160,7 @@ class Chat_Bot_Admin {
 			'openai_api_key',
 			'Clave API de OpenAI',
 			array( $this, 'api_key_field_callback' ),
-			'chatbot_settings',
+			'chatbot_settings_ai',
 			'chatbot_main_section'
 		);
 
@@ -167,7 +168,7 @@ class Chat_Bot_Admin {
 			'openai_model',
 			'Modelo de OpenAI',
 			array( $this, 'model_field_callback' ),
-			'chatbot_settings',
+			'chatbot_settings_ai',
 			'chatbot_main_section'
 		);
 
@@ -175,7 +176,7 @@ class Chat_Bot_Admin {
 			'google_api_key',
 			'Clave API de Google AI',
 			array( $this, 'google_api_key_field_callback' ),
-			'chatbot_settings',
+			'chatbot_settings_ai',
 			'chatbot_main_section'
 		);
 
@@ -183,7 +184,7 @@ class Chat_Bot_Admin {
 			'google_model',
 			'Modelo de Google AI',
 			array( $this, 'google_model_field_callback' ),
-			'chatbot_settings',
+			'chatbot_settings_ai',
 			'chatbot_main_section'
 		);
 
@@ -191,14 +192,14 @@ class Chat_Bot_Admin {
 			'chatbot_design_section',
 			'Personalización del Bot',
 			null,
-			'chatbot_settings'
+			'chatbot_settings_design'
 		);
 
 		add_settings_field(
 			'bot_name',
 			'Nombre del bot',
 			array( $this, 'bot_name_field_callback' ),
-			'chatbot_settings',
+			'chatbot_settings_design',
 			'chatbot_design_section'
 		);
 
@@ -206,7 +207,7 @@ class Chat_Bot_Admin {
 			'button_label',
 			'Texto/emoji del botón',
 			array( $this, 'button_label_field_callback' ),
-			'chatbot_settings',
+			'chatbot_settings_design',
 			'chatbot_design_section'
 		);
 
@@ -214,7 +215,7 @@ class Chat_Bot_Admin {
 			'position',
 			'Posición del widget',
 			array( $this, 'position_field_callback' ),
-			'chatbot_settings',
+			'chatbot_settings_design',
 			'chatbot_design_section'
 		);
 
@@ -222,7 +223,7 @@ class Chat_Bot_Admin {
 			'theme',
 			'Tema por defecto',
 			array( $this, 'theme_field_callback' ),
-			'chatbot_settings',
+			'chatbot_settings_design',
 			'chatbot_design_section'
 		);
 
@@ -230,7 +231,7 @@ class Chat_Bot_Admin {
 			'primary_color',
 			'Color primario',
 			array( $this, 'primary_color_field_callback' ),
-			'chatbot_settings',
+			'chatbot_settings_design',
 			'chatbot_design_section'
 		);
 
@@ -238,7 +239,7 @@ class Chat_Bot_Admin {
 			'accent_color',
 			'Color secundario',
 			array( $this, 'accent_color_field_callback' ),
-			'chatbot_settings',
+			'chatbot_settings_design',
 			'chatbot_design_section'
 		);
 
@@ -246,7 +247,7 @@ class Chat_Bot_Admin {
 			'widget_width',
 			'Ancho del widget (px)',
 			array( $this, 'widget_width_field_callback' ),
-			'chatbot_settings',
+			'chatbot_settings_design',
 			'chatbot_design_section'
 		);
 
@@ -254,7 +255,7 @@ class Chat_Bot_Admin {
 			'widget_height',
 			'Alto del widget (px)',
 			array( $this, 'widget_height_field_callback' ),
-			'chatbot_settings',
+			'chatbot_settings_design',
 			'chatbot_design_section'
 		);
 
@@ -262,7 +263,7 @@ class Chat_Bot_Admin {
 			'font_family',
 			'Fuente del widget',
 			array( $this, 'font_family_field_callback' ),
-			'chatbot_settings',
+			'chatbot_settings_design',
 			'chatbot_design_section'
 		);
 	}
@@ -272,30 +273,48 @@ class Chat_Bot_Admin {
 	 */
 	public function settings_page() {
 		?>
-		<div class="wrap">
+		<div class="wrap chatbot-settings">
 			<h1>Configuración del Chat Bot</h1>
 			<?php $this->render_training_notice(); ?>
-			<form method="post" action="options.php">
-				<?php
-				settings_fields( 'chatbot_settings' );
-				do_settings_sections( 'chatbot_settings' );
-				submit_button();
-				?>
-			</form>
+			<h2 class="nav-tab-wrapper">
+				<a href="#chatbot-tab-ai" class="nav-tab nav-tab-active chatbot-nav-tab" data-tab="ai">Configuración de IA</a>
+				<a href="#chatbot-tab-training" class="nav-tab chatbot-nav-tab" data-tab="training">Subida de archivos</a>
+				<a href="#chatbot-tab-design" class="nav-tab chatbot-nav-tab" data-tab="design">Personalización</a>
+			</h2>
 
-			<hr>
+			<div id="chatbot-tab-ai" class="chatbot-tab-panel is-active">
+				<form method="post" action="options.php">
+					<?php
+					settings_fields( 'chatbot_settings' );
+					do_settings_sections( 'chatbot_settings_ai' );
+					submit_button();
+					?>
+				</form>
+			</div>
 
-			<h2>Entrenamiento con archivos</h2>
-			<p>Sube archivos para indexar su contenido y usarlos en las respuestas del chatbot.</p>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data">
-				<?php wp_nonce_field( 'chatbot_upload_training_file' ); ?>
-				<input type="hidden" name="action" value="chatbot_upload_training_file">
-				<input type="file" name="chatbot_training_file" accept=".txt,.md,.csv,.pdf,.docx" required>
-				<p class="description">Formatos permitidos: txt, md, csv, pdf, docx. Tamaño máximo: <?php echo esc_html( size_format( $this->get_training_max_file_size() ) ); ?>.</p>
-				<?php submit_button( 'Subir e indexar' ); ?>
-			</form>
+			<div id="chatbot-tab-training" class="chatbot-tab-panel">
+				<h2>Entrenamiento con archivos</h2>
+				<p>Sube archivos para indexar su contenido y usarlos en las respuestas del chatbot.</p>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data">
+					<?php wp_nonce_field( 'chatbot_upload_training_file' ); ?>
+					<input type="hidden" name="action" value="chatbot_upload_training_file">
+					<input type="file" name="chatbot_training_file" accept=".txt,.md,.csv,.pdf,.docx" required>
+					<p class="description">Formatos permitidos: txt, md, csv, pdf, docx. Tamaño máximo: <?php echo esc_html( size_format( $this->get_training_max_file_size() ) ); ?>.</p>
+					<?php submit_button( 'Subir e indexar' ); ?>
+				</form>
 
-			<?php $this->render_training_documents_list(); ?>
+				<?php $this->render_training_documents_list(); ?>
+			</div>
+
+			<div id="chatbot-tab-design" class="chatbot-tab-panel">
+				<form method="post" action="options.php">
+					<?php
+					settings_fields( 'chatbot_settings' );
+					do_settings_sections( 'chatbot_settings_design' );
+					submit_button();
+					?>
+				</form>
+			</div>
 		</div>
 		<?php
 	}
@@ -393,13 +412,13 @@ class Chat_Bot_Admin {
 
 	public function primary_color_field_callback() {
 		$value = get_option( 'chatbot_primary_color', '#10b981' );
-		echo '<input type="text" name="chatbot_primary_color" value="' . esc_attr( $value ) . '" class="regular-text" />';
+		echo '<input type="text" name="chatbot_primary_color" value="' . esc_attr( $value ) . '" class="regular-text chatbot-color-field" data-default-color="#10b981" />';
 		echo '<p class="description">Color primario (ej: #10b981).</p>';
 	}
 
 	public function accent_color_field_callback() {
 		$value = get_option( 'chatbot_accent_color', '#3b82f6' );
-		echo '<input type="text" name="chatbot_accent_color" value="' . esc_attr( $value ) . '" class="regular-text" />';
+		echo '<input type="text" name="chatbot_accent_color" value="' . esc_attr( $value ) . '" class="regular-text chatbot-color-field" data-default-color="#3b82f6" />';
 		echo '<p class="description">Color secundario (ej: #3b82f6).</p>';
 	}
 

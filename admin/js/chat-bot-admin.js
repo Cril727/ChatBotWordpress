@@ -28,6 +28,31 @@
 	 * Although scripts in the WordPress core, Plugins and Themes may be
 	 * practising this, we should strive to set a better example in our own work.
 	 */
+	$(function() {
+		if ($.fn.wpColorPicker) {
+			$('.chatbot-color-field').wpColorPicker();
+		}
 
+		function setActiveTab(tab) {
+			$('.chatbot-nav-tab').removeClass('nav-tab-active');
+			$('.chatbot-tab-panel').removeClass('is-active');
+
+			$('.chatbot-nav-tab[data-tab="' + tab + '"]').addClass('nav-tab-active');
+			$('#chatbot-tab-' + tab).addClass('is-active');
+		}
+
+		$('.chatbot-nav-tab').on('click', function(e) {
+			e.preventDefault();
+			const tab = $(this).data('tab');
+			setActiveTab(tab);
+			if (tab) {
+				window.location.hash = 'chatbot-tab-' + tab;
+			}
+		});
+
+		const hash = window.location.hash.replace('#', '');
+		if (hash.indexOf('chatbot-tab-') === 0) {
+			setActiveTab(hash.replace('chatbot-tab-', ''));
+		}
+	});
 })( jQuery );
-

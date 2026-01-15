@@ -2,3 +2,30 @@
  * All of the CSS for your admin-specific functionality should be
  * included in this file.
  */
+.chatbot-settings .nav-tab-wrapper {
+    margin-top: 20px;
+}
+
+.chatbot-settings .chatbot-tab-panel {
+    display: none;
+    padding: 20px;
+    background: #ffffff;
+    border: 1px solid #c3c4c7;
+    border-top: none;
+}
+
+.chatbot-settings .chatbot-tab-panel.is-active {
+    display: block;
+}
+
+.chatbot-settings .chatbot-tab-panel h2 {
+    margin-top: 0;
+}
+
+.chatbot-settings .form-table th {
+    width: 220px;
+}
+
+.chatbot-settings .chatbot-tab-panel form + form {
+    margin-top: 20px;
+}
