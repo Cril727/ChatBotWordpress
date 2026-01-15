@@ -130,6 +130,15 @@ class Chat_Bot_Admin {
 		register_setting( 'chatbot_settings', 'chatbot_openai_model' );
 		register_setting( 'chatbot_settings', 'chatbot_google_api_key' );
 		register_setting( 'chatbot_settings', 'chatbot_google_model' );
+		register_setting( 'chatbot_settings', 'chatbot_bot_name', array( $this, 'sanitize_bot_name' ) );
+		register_setting( 'chatbot_settings', 'chatbot_button_label', array( $this, 'sanitize_button_label' ) );
+		register_setting( 'chatbot_settings', 'chatbot_position', array( $this, 'sanitize_position' ) );
+		register_setting( 'chatbot_settings', 'chatbot_theme', array( $this, 'sanitize_theme' ) );
+		register_setting( 'chatbot_settings', 'chatbot_primary_color', array( $this, 'sanitize_color' ) );
+		register_setting( 'chatbot_settings', 'chatbot_accent_color', array( $this, 'sanitize_color' ) );
+		register_setting( 'chatbot_settings', 'chatbot_widget_width', array( $this, 'sanitize_dimension' ) );
+		register_setting( 'chatbot_settings', 'chatbot_widget_height', array( $this, 'sanitize_dimension' ) );
+		register_setting( 'chatbot_settings', 'chatbot_font_family', array( $this, 'sanitize_font_family' ) );
 
 		add_settings_section(
 			'chatbot_main_section',
@@ -176,6 +185,85 @@ class Chat_Bot_Admin {
 			array( $this, 'google_model_field_callback' ),
 			'chatbot_settings',
 			'chatbot_main_section'
+		);
+
+		add_settings_section(
+			'chatbot_design_section',
+			'Personalización del Bot',
+			null,
+			'chatbot_settings'
+		);
+
+		add_settings_field(
+			'bot_name',
+			'Nombre del bot',
+			array( $this, 'bot_name_field_callback' ),
+			'chatbot_settings',
+			'chatbot_design_section'
+		);
+
+		add_settings_field(
+			'button_label',
+			'Texto/emoji del botón',
+			array( $this, 'button_label_field_callback' ),
+			'chatbot_settings',
+			'chatbot_design_section'
+		);
+
+		add_settings_field(
+			'position',
+			'Posición del widget',
+			array( $this, 'position_field_callback' ),
+			'chatbot_settings',
+			'chatbot_design_section'
+		);
+
+		add_settings_field(
+			'theme',
+			'Tema por defecto',
+			array( $this, 'theme_field_callback' ),
+			'chatbot_settings',
+			'chatbot_design_section'
+		);
+
+		add_settings_field(
+			'primary_color',
+			'Color primario',
+			array( $this, 'primary_color_field_callback' ),
+			'chatbot_settings',
+			'chatbot_design_section'
+		);
+
+		add_settings_field(
+			'accent_color',
+			'Color secundario',
+			array( $this, 'accent_color_field_callback' ),
+			'chatbot_settings',
+			'chatbot_design_section'
+		);
+
+		add_settings_field(
+			'widget_width',
+			'Ancho del widget (px)',
+			array( $this, 'widget_width_field_callback' ),
+			'chatbot_settings',
+			'chatbot_design_section'
+		);
+
+		add_settings_field(
+			'widget_height',
+			'Alto del widget (px)',
+			array( $this, 'widget_height_field_callback' ),
+			'chatbot_settings',
+			'chatbot_design_section'
+		);
+
+		add_settings_field(
+			'font_family',
+			'Fuente del widget',
+			array( $this, 'font_family_field_callback' ),
+			'chatbot_settings',
+			'chatbot_design_section'
 		);
 	}
 
@@ -266,6 +354,124 @@ class Chat_Bot_Admin {
 		echo '<option value="gpt-4-turbo" ' . selected( $value, 'gpt-4-turbo', false ) . '>GPT-4 Turbo</option>';
 		echo '</select>';
 		echo '<p class="description">Selecciona el modelo de OpenAI a usar.</p>';
+	}
+
+	public function bot_name_field_callback() {
+		$value = get_option( 'chatbot_bot_name', 'Chatbot' );
+		echo '<input type="text" name="chatbot_bot_name" value="' . esc_attr( $value ) . '" class="regular-text" />';
+		echo '<p class="description">Este nombre se muestra en el encabezado del chat.</p>';
+	}
+
+	public function button_label_field_callback() {
+		$value = get_option( 'chatbot_button_label', '💬' );
+		echo '<input type="text" name="chatbot_button_label" value="' . esc_attr( $value ) . '" class="regular-text" />';
+		echo '<p class="description">Puede ser texto corto o un emoji (por ejemplo: 💬).</p>';
+	}
+
+	public function position_field_callback() {
+		$value = get_option( 'chatbot_position', 'bottom-right' );
+		$options = array(
+			'bottom-right' => 'Abajo derecha',
+			'bottom-left' => 'Abajo izquierda',
+			'top-right' => 'Arriba derecha',
+			'top-left' => 'Arriba izquierda',
+		);
+		echo '<select name="chatbot_position">';
+		foreach ( $options as $key => $label ) {
+			echo '<option value="' . esc_attr( $key ) . '" ' . selected( $value, $key, false ) . '>' . esc_html( $label ) . '</option>';
+		}
+		echo '</select>';
+	}
+
+	public function theme_field_callback() {
+		$value = get_option( 'chatbot_theme', 'light' );
+		echo '<select name="chatbot_theme">';
+		echo '<option value="light" ' . selected( $value, 'light', false ) . '>Claro</option>';
+		echo '<option value="dark" ' . selected( $value, 'dark', false ) . '>Oscuro</option>';
+		echo '</select>';
+	}
+
+	public function primary_color_field_callback() {
+		$value = get_option( 'chatbot_primary_color', '#10b981' );
+		echo '<input type="text" name="chatbot_primary_color" value="' . esc_attr( $value ) . '" class="regular-text" />';
+		echo '<p class="description">Color primario (ej: #10b981).</p>';
+	}
+
+	public function accent_color_field_callback() {
+		$value = get_option( 'chatbot_accent_color', '#3b82f6' );
+		echo '<input type="text" name="chatbot_accent_color" value="' . esc_attr( $value ) . '" class="regular-text" />';
+		echo '<p class="description">Color secundario (ej: #3b82f6).</p>';
+	}
+
+	public function widget_width_field_callback() {
+		$value = get_option( 'chatbot_widget_width', '' );
+		echo '<input type="number" name="chatbot_widget_width" value="' . esc_attr( $value ) . '" class="small-text" min="260" max="900" />';
+		echo '<p class="description">Deja vacio para usar el valor por defecto.</p>';
+	}
+
+	public function widget_height_field_callback() {
+		$value = get_option( 'chatbot_widget_height', '' );
+		echo '<input type="number" name="chatbot_widget_height" value="' . esc_attr( $value ) . '" class="small-text" min="320" max="1200" />';
+		echo '<p class="description">Deja vacio para usar el valor por defecto.</p>';
+	}
+
+	public function font_family_field_callback() {
+		$value = get_option( 'chatbot_font_family', '' );
+		echo '<input type="text" name="chatbot_font_family" value="' . esc_attr( $value ) . '" class="regular-text" />';
+		echo '<p class="description">Ejemplo: \"Poppins\", sans-serif. Deja vacio para usar la fuente del sitio.</p>';
+	}
+
+	public function sanitize_bot_name( $input ) {
+		$value = sanitize_text_field( $input );
+		return $value !== '' ? $value : 'Chatbot';
+	}
+
+	public function sanitize_button_label( $input ) {
+		$value = sanitize_text_field( $input );
+		$value = trim( $value );
+		if ( $value === '' ) {
+			return '💬';
+		}
+		if ( function_exists( 'mb_substr' ) ) {
+			return mb_substr( $value, 0, 8 );
+		}
+		return substr( $value, 0, 8 );
+	}
+
+	public function sanitize_position( $input ) {
+		$allowed = array( 'bottom-right', 'bottom-left', 'top-right', 'top-left' );
+		return in_array( $input, $allowed, true ) ? $input : 'bottom-right';
+	}
+
+	public function sanitize_theme( $input ) {
+		return in_array( $input, array( 'light', 'dark' ), true ) ? $input : 'light';
+	}
+
+	public function sanitize_color( $input ) {
+		$color = sanitize_hex_color( $input );
+		return $color ? $color : '';
+	}
+
+	public function sanitize_dimension( $input ) {
+		if ( $input === '' ) {
+			return '';
+		}
+		$value = absint( $input );
+		if ( $value < 200 ) {
+			$value = 200;
+		}
+		if ( $value > 1400 ) {
+			$value = 1400;
+		}
+		return (string) $value;
+	}
+
+	public function sanitize_font_family( $input ) {
+		$value = sanitize_text_field( $input );
+		if ( $value === '' ) {
+			return '';
+		}
+		return preg_replace( '/[^a-zA-Z0-9,\\-\\s\\\'\\"]+/', '', $value );
 	}
 
 	private function render_training_notice() {

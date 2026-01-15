@@ -8,7 +8,7 @@
 				<button id="neurorag-bot-button">💬</button>
 				<div id="neurorag-bot-container" style="display: none;">
 					<div id="neurorag-bot-header">
-						Chatbot
+						<span id="neurorag-bot-title">Chatbot</span>
 						<div id="neurorag-bot-controls">
 							<button id="neurorag-bot-theme-toggle">🌙</button>
 							<button id="neurorag-bot-close">×</button>
@@ -34,8 +34,59 @@
 		const $input = $('#neurorag-bot-input');
 		const $send = $('#neurorag-bot-send');
 		const $themeToggle = $('#neurorag-bot-theme-toggle');
+		const $title = $('#neurorag-bot-title');
 
 		let enviando = false;
+
+		function applyUiSettings() {
+			const settings = window.chatbot_ui_settings || {};
+
+			if (settings.bot_name) {
+				$title.text(settings.bot_name);
+			}
+
+			if (settings.button_label) {
+				$button.text(settings.button_label);
+			}
+
+			if (settings.position) {
+				const positions = [
+					'neurorag-bot-pos-bottom-right',
+					'neurorag-bot-pos-bottom-left',
+					'neurorag-bot-pos-top-right',
+					'neurorag-bot-pos-top-left'
+				];
+				$widget.removeClass(positions.join(' '));
+				$widget.addClass('neurorag-bot-pos-' + settings.position);
+			}
+
+			if (settings.theme === 'dark') {
+				$widget.addClass('neurorag-theme-dark');
+				$themeToggle.text('☀️');
+			}
+
+			if (settings.primary_color) {
+				$widget[0].style.setProperty('--chatbot-primary', settings.primary_color);
+			}
+
+			if (settings.accent_color) {
+				$widget[0].style.setProperty('--chatbot-accent', settings.accent_color);
+			}
+
+			if (settings.widget_width) {
+				$widget[0].style.setProperty('--chatbot-width', settings.widget_width + 'px');
+			}
+
+			if (settings.widget_height) {
+				$widget[0].style.setProperty('--chatbot-height', settings.widget_height + 'px');
+			}
+
+			if (settings.font_family) {
+				$widget[0].style.setProperty('--chatbot-font', settings.font_family);
+			}
+		}
+
+		applyUiSettings();
 
 		function escapeHTML(text) {
 			return $('<div>').text(text).html();

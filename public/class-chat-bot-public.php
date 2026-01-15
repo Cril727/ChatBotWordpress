@@ -103,6 +103,18 @@ class Chat_Bot_Public {
 			'nonce' => wp_create_nonce( 'chatbot_nonce' ),
 		) );
 
+		wp_localize_script( $this->plugin_name, 'chatbot_ui_settings', array(
+			'bot_name' => get_option( 'chatbot_bot_name', 'Chatbot' ),
+			'button_label' => get_option( 'chatbot_button_label', '💬' ),
+			'position' => get_option( 'chatbot_position', 'bottom-right' ),
+			'theme' => get_option( 'chatbot_theme', 'light' ),
+			'primary_color' => get_option( 'chatbot_primary_color', '#10b981' ),
+			'accent_color' => get_option( 'chatbot_accent_color', '#3b82f6' ),
+			'widget_width' => get_option( 'chatbot_widget_width', '' ),
+			'widget_height' => get_option( 'chatbot_widget_height', '' ),
+			'font_family' => get_option( 'chatbot_font_family', '' ),
+		) );
+
 		// Pass current post ID
 		if ( is_singular() ) {
 			wp_localize_script( $this->plugin_name, 'chatbot_post_id', array( 'id' => get_the_ID() ) );
